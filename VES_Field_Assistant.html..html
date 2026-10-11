@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>VES Field Assistant</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#b5730e">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf8f3;
+    --panel:#ffffff;
+    --panel-2:#f3efe4;
+    --panel-3:#e9e1cf;
+    --line: rgba(120,72,22,0.14);
+    --line-strong: rgba(120,72,22,0.36);
+    --text:#332f28;
+    --text-dim:#76695c;
+    --text-dimmer:#a89d89;
+    --amber:#b5730e;
+    --on-amber:#fff8ea;
+    --amber-dim: rgba(181,115,14,0.55);
+    --teal:#1f6259;
+    --rust:#a63a2c;
+    --olive:#5c7a34;
+    --font-d:'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-m:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-m); font-size:14px;
+    display:flex; justify-content:center;
+    overscroll-behavior:none;
+  }
+  #shell{
+    width:100%; max-width:480px; min-height:100dvh;
+    display:flex; flex-direction:column;
+    background:var(--bg);
+    position:relative;
+    border-left:1px solid var(--line); border-right:1px solid var(--line);
+  }
+
+  /* ---- Top bar ---- */
+  #topbar{
+    padding:16px 18px 12px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel-2), var(--bg));
+    flex-shrink:0;
+  }
+  #topbar .brand{
+    font-family:var(--font-d); font-weight:700; font-size:19px;
+    letter-spacing:0.2px; color:var(--text); display:flex; align-items:center; gap:9px;
+  }
+  #topbar .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px var(--amber-dim);}
+  #topbar .byline{
+    font-family:var(--font-m); font-size:9.5px; color:var(--text-dimmer); margin:2px 0 0 18px; letter-spacing:0.3px;
+  }
+  #topbar .status-row{
+    margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    font-size:11.5px; color:var(--text-dim);
+  }
+  .chip{
+    border:1px solid var(--line-strong); border-radius:3px; padding:3px 8px;
+    color:var(--text-dim); white-space:nowrap; display:inline-flex; align-items:center; gap:5px;
+    background:var(--panel);
+  }
+  .chip b{color:var(--text); font-weight:600;}
+
+  /* ---- Panel / scroll area ---- */
+  #panel{
+    flex:1; overflow-y:auto; padding:18px 18px 100px;
+  }
+  .section-title{
+    font-family:var(--font-d); font-weight:600; font-size:15px; color:var(--text);
+    margin:0 0 4px;
+  }
+  .section-sub{ font-size:12px; color:var(--text-dimmer); margin:0 0 18px; line-height:1.5;}
+
+  label{ display:block; font-size:11px; color:var(--text-dim); margin:14px 0 6px; letter-spacing:0.2px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], input[type=number]{
+    width:100%; background:var(--panel-2); border:1px solid var(--line-strong);
+    color:var(--text); padding:11px 12px; border-radius:4px; font-family:var(--font-m);
+    font-size:14.5px; outline:none;
+  }
+  input:focus{ border-color:var(--amber); }
+  input::placeholder{color:var(--text-dimmer);}
+
+  .btn{
+    font-family:var(--font-d); font-weight:600; font-size:13.5px;
+    border-radius:4px; border:1px solid var(--line-strong); background:var(--panel-2);
+    color:var(--text); padding:12px 16px; cursor:pointer; text-align:center;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    transition:border-color .15s, background .15s;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{ background:var(--amber); border-color:var(--amber); color:var(--on-amber);}
+  .btn.primary:hover{background:#c17f17;}
+  .btn.ghost{ background:transparent; }
+  .btn.danger{ border-color:rgba(166,58,44,0.5); color:var(--rust);}
+  .btn.block{width:100%;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-row{display:flex; gap:10px; margin-top:16px;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:16px; margin-bottom:14px;
+  }
+  .divider{height:1px; background:var(--line); margin:18px 0;}
+
+  .seg{
+    display:flex; border:1px solid var(--line-strong); border-radius:5px; overflow:hidden; margin-bottom:16px;
+  }
+  .seg button{
+    flex:1; background:var(--panel-2); color:var(--text-dim); border:none; padding:10px 4px;
+    font-family:var(--font-d); font-weight:600; font-size:12px; cursor:pointer; border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--amber); color:var(--on-amber);}
+
+  .array-pick{ display:flex; flex-direction:column; gap:10px; }
+  .array-opt{
+    border:1px solid var(--line-strong); border-radius:6px; padding:13px 14px; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; background:var(--panel);
+  }
+  .array-opt .name{font-family:var(--font-d); font-weight:600; font-size:14px; color:var(--text);}
+  .array-opt .desc{font-size:11px; color:var(--text-dimmer); margin-top:2px;}
+  .array-opt.active{border-color:var(--amber); background:rgba(181,115,14,0.08);}
+  .array-opt .radio{width:16px; height:16px; border-radius:50%; border:1.5px solid var(--line-strong); flex-shrink:0;}
+  .array-opt.active .radio{border-color:var(--amber); background:radial-gradient(circle, var(--amber) 0 40%, transparent 44%);}
+
+  .alert{
+    border-radius:5px; padding:11px 13px; font-size:12.5px; margin-bottom:14px; line-height:1.5;
+    border:1px solid; display:flex; gap:9px; align-items:flex-start;
+  }
+  .alert.err{ background:rgba(166,58,44,0.09); border-color:rgba(166,58,44,0.4); color:#7a2318;}
+  .alert.info{ background:rgba(31,98,89,0.09); border-color:rgba(31,98,89,0.4); color:#123f38;}
+  .alert.ok{ background:rgba(92,122,52,0.09); border-color:rgba(92,122,52,0.4); color:#3c5222;}
+
+  /* ---- Data table ---- */
+  .row-item{
+    border:1px solid var(--line); border-left:3px solid var(--amber-dim); border-radius:4px;
+    padding:11px 13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;
+    background:var(--panel);
+  }
+  .row-item .meta{font-size:11px; color:var(--text-dimmer);}
+  .row-item .rho{font-family:var(--font-d); font-weight:700; font-size:16px; color:var(--text);}
+  .row-item .rho small{font-weight:500; font-size:10.5px; color:var(--text-dimmer);}
+  .row-actions{display:flex; gap:6px;}
+  .icon-btn{
+    width:30px; height:30px; border-radius:4px; border:1px solid var(--line-strong); background:var(--panel-2);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-dim);
+  }
+  .icon-btn:hover{border-color:var(--amber);}
+  .empty{
+    text-align:center; padding:50px 20px; color:var(--text-dimmer);
+  }
+  .empty svg{opacity:0.4; margin-bottom:14px; width:46px; height:46px;}
+  .empty .t{font-family:var(--font-d); font-weight:600; color:var(--text-dim); margin-bottom:6px; font-size:14px;}
+
+  /* ---- Chart / graph paper ---- */
+  .chart-frame{
+    background:
+      linear-gradient(rgba(120,72,22,0.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,72,22,0.09) 1px, transparent 1px),
+      var(--panel);
+    background-size:20px 20px;
+    border:1px solid var(--line-strong); border-radius:6px; padding:8px; overflow:hidden;
+    position:relative;
+  }
+  .chart-dl{
+    position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:4px;
+    border:1px solid var(--line-strong); background:var(--panel); color:var(--text-dim);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;
+  }
+  .chart-dl:hover{border-color:var(--amber); color:var(--amber);}
+  .chart-dl svg{width:15px; height:15px;}
+  .legend{display:flex; gap:16px; font-size:11px; color:var(--text-dim); margin-top:10px;}
+  .legend .sw{display:inline-flex; align-items:center; gap:6px;}
+  .legend .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .legend .ln{width:14px; height:0; border-top:2px dashed var(--teal); display:inline-block;}
+
+  /* ---- Layer stick ---- */
+  .stick-wrap{display:flex; gap:14px; align-items:stretch;}
+  .stick{ width:64px; border:1px solid var(--line-strong); border-radius:4px; overflow:hidden; display:flex; flex-direction:column;}
+  .stick .layer{ display:flex; align-items:center; justify-content:center; font-family:var(--font-m); font-size:10px; color:#14140f; font-weight:700;}
+  .stick .layer.basement{
+    background-image: repeating-linear-gradient(135deg, rgba(0,0,0,0.18) 0 6px, transparent 6px 12px);
+  }
+  .layer-table{ flex:1; border-collapse:collapse; font-size:12px; }
+  .layer-table th{ text-align:center; font-weight:600; color:var(--text-dimmer); font-size:10px; text-transform:uppercase; letter-spacing:0.3px; padding:0 0 7px 10px; border-bottom:1px solid var(--line-strong); }
+  .layer-table th:first-child{ text-align:left; padding-left:0; }
+  .layer-table td{ padding:8px 0 8px 10px; border-bottom:1px dashed var(--line); color:var(--text-dim); text-align:center; }
+  .layer-table td:first-child{ text-align:left; padding-left:0; color:var(--text-dim); }
+  .layer-table td:last-child{ color:var(--text); font-weight:600; }
+  .layer-table .swatch{width:9px; height:9px; border-radius:2px; display:inline-block; margin-right:7px;}
+
+  .stat-grid{display:flex; gap:10px; margin:14px 0;}
+  .stat{flex:1; border:1px solid var(--line); border-radius:5px; padding:10px 12px; background:var(--panel-2);}
+  .stat .n{font-family:var(--font-d); font-size:20px; font-weight:700; color:var(--text);}
+  .stat .l{font-size:10.5px; color:var(--text-dimmer); margin-top:2px;}
+
+  .layer-form-row{display:grid; grid-template-columns:24px 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px;}
+  .layer-form-row .li-num{font-family:var(--font-d); font-weight:700; color:var(--text-dimmer); font-size:12px;}
+
+  .spinner{
+    width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,248,234,0.35); border-top-color:var(--on-amber);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{transform:rotate(360deg);} }
+
+  /* ---- Bottom nav ---- */
+  #nav{
+    position:sticky; bottom:0; display:flex; border-top:1px solid var(--line);
+    background:rgba(243,239,226,0.95); backdrop-filter:blur(6px); flex-shrink:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #nav button{
+    flex:1; background:none; border:none; color:var(--text-dimmer); padding:10px 2px 9px;
+    display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;
+    font-family:var(--font-d); font-size:10px; font-weight:600; letter-spacing:0.1px;
+  }
+  #nav button svg{width:19px; height:19px;}
+  #nav button.active{color:var(--amber);}
+  #nav button.active svg{filter:drop-shadow(0 0 3px rgba(181,115,14,0.35));}
+
+  /* ---- Modal ---- */
+  #modal-backdrop{
+    position:fixed; inset:0; background:rgba(20,16,8,0.45); display:none;
+    align-items:flex-end; justify-content:center; z-index:50;
+  }
+  #modal-backdrop.show{display:flex;}
+  #modal{
+    width:100%; max-width:480px; background:var(--panel-2); border-top:1px solid var(--line-strong);
+    border-radius:14px 14px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height:85vh; overflow-y:auto;
+  }
+  #modal .close-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  #modal h3{font-family:var(--font-d); margin:0; font-size:15px;}
+
+  ::-webkit-scrollbar{width:0; height:0;}
+</style>
+</head>
+<body>
+<script>
+  // Registers the offline service worker, when this page is served over a
+  // secure origin (https://, or localhost) that supports it. Opened as a
+  // raw local file, serviceWorker is unavailable -- the app still runs
+  // fully, it just won't cache itself for a later offline reload.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {
+        // Registration can fail (e.g. insecure origin, browser without
+        // support) without that being a reason to interrupt the app --
+        // everything else works regardless.
+      });
+    });
+  }
+</script>
+<div id="shell">
+  <div id="topbar">
+    <div class="brand"><span class="dot"></span>VES FIELD ASSISTANT</div>
+    <div class="byline">Powered by Asije Labs &middot; v4.0 &middot; &copy; 2026</div>
+    <div class="status-row" id="status-row"></div>
+  </div>
+  <div id="panel"></div>
+  <div id="nav"></div>
+</div>
+
+<div id="modal-backdrop"><div id="modal"></div></div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const APP_VERSION = '4.0';
+const APP_COPYRIGHT = '\u00A9 2026 Asije Labs';
+
+// Hard ceiling on the last (deepest) layer's resistivity. Capped at 20,000
+// Ohm-m by design -- the optimizer will never report a deeper/basement
+// resistivity above this, however steeply the tail of the field curve rises
+// (equivalence lets that parameter drift arbitrarily high once it's
+// saturated the curve, with no further improvement to the fit, so this cap
+// is what keeps the reported value physically sane rather than a numerical
+// runaway artifact).
+const MAX_RES_CEILING = 20000;
+const DEFAULT_RES_CEILING = MAX_RES_CEILING;
+
+const state = {
+  tab: 'setup',
+  analyzeTab: 'curve',
+  metadata: { project:'', station:'', geologist:'', gps:'' },
+  arrayType: 'Standard Schlumberger',
+  data: [],
+  lastModel: null,
+  editIndex: null,
+  invertLayers: 3,
+  designLayers: [ {rho:100, h:5}, {rho:20, h:15}, {rho:500, h:null} ],
+  designIterationCount: 0,
+  designIterationSnapshot: null,
+  logFormValues: { 'f-ab2': '', 'f-mn2': '', 'f-r': '', 'f-rho': '' },
+  logMode: 'full',
+  justRestored: 0,
+  resCeiling: DEFAULT_RES_CEILING,
+  gpsFetching: false,
+  gpsError: null,
+  gpsNote: null,
+};
+
+/* =========================================================================
+   SESSION PERSISTENCE (localStorage) -- so an interrupted survey (phone
+   screen off, tab closed, browser crash) doesn't lose logged readings.
+   This is a plain, self-contained HTML file opened directly in a real
+   browser (not Claude's sandboxed artifact preview), so localStorage
+   behaves normally here. Autosave is debounced and best-effort: if
+   storage is unavailable (private browsing, quota exceeded, etc.) the
+   app still works fully, just without the safety net.
+   ========================================================================= */
+const SESSION_STORAGE_KEY = 'ves_field_assistant_session_v1';
+let _sessionSaveTimer = null;
+
+function scheduleSessionSave(){
+  if (_sessionSaveTimer) clearTimeout(_sessionSaveTimer);
+  _sessionSaveTimer = setTimeout(saveSessionToStorage, 500);
+}
+function saveSessionToStorage(){
+  try {
+    const snapshot = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      data: state.data,
+      metadata: state.metadata,
+      arrayType: state.arrayType,
+      lastModel: state.lastModel,
+      invertLayers: state.invertLayers,
+      designLayers: state.designLayers,
+      resCeiling: state.resCeiling,
+    };
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch(e){ /* storage unavailable -- fail silently, app still works without persistence */ }
+}
+function loadSessionFromStorage(){
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw);
+    return (snapshot && typeof snapshot === 'object') ? snapshot : null;
+  } catch(e){ return null; }
+}
+function clearSessionStorage(){
+  try { window.localStorage.removeItem(SESSION_STORAGE_KEY); } catch(e){ /* ignore */ }
+}
+function restoreSessionIfAvailable(){
+  const snapshot = loadSessionFromStorage();
+  if (!snapshot || !Array.isArray(snapshot.data) || snapshot.data.length === 0) return false;
+  state.data = snapshot.data;
+  state.metadata = snapshot.metadata || state.metadata;
+  state.arrayType = snapshot.arrayType || state.arrayType;
+  state.lastModel = snapshot.lastModel || null;
+  if (typeof snapshot.invertLayers === 'number') state.invertLayers = snapshot.invertLayers;
+  if (Array.isArray(snapshot.designLayers)) state.designLayers = snapshot.designLayers;
+  if (typeof snapshot.resCeiling === 'number' && snapshot.resCeiling > 0) state.resCeiling = Math.min(snapshot.resCeiling, MAX_RES_CEILING);
+  state.justRestored = snapshot.data.length;
+  return true;
+}
+
+const ARRAY_INFO = {
+  'Standard Schlumberger': { code:'SCH', mult:1, desc:'AB/2 & MN/2 spacing, x1.0' },
+  'Half-Schlumberger':     { code:'HSC', mult:2, desc:'AB/2 & MN/2 spacing, x2.0' },
+};
+
+/* =========================================================================
+   GEOPHYSICS ENGINE
+   Ghosh (1971) recursive resistivity transform + 28-pt "YM6" digital linear
+   filter (Murakami, Zerilli & Bisdorf, 1984, USGS Open-File Report 84-280,
+   public domain). Validated against the report's own reference tables.
+   ========================================================================= */
+const YM6_FC = [
+  8.6463368e-5, -3.6875438e-4, 9.2111524e-4, -1.8772656e-3,
+  3.5343506e-3, -6.4612273e-3, 1.1691267e-2, -2.1088677e-2,
+  3.8045092e-2, -6.8913866e-2, 1.2666755e-1, -2.4355470e-1,
+  5.2117305e-1, -1.2644217, 2.7992503, -3.4853734,
+  4.1912647e-1, 1.1950174, 6.1073260e-1, 2.4298434e-1,
+  8.2207576e-2, 2.7770876e-2, 8.7075202e-3, 2.8615354e-3,
+  3.8399812e-4, 2.8020133e-4, 1.0060054e-4, 3.4147273e-5,
+];
+const YM6_F = Math.pow(10, 1/6);
+const YM6_Y1 = 7.4222404;
+
+function calcKSchlumberger(ab2, mn2){ return Math.PI * ((ab2*ab2 - mn2*mn2) / (2*mn2)); }
+
+function resistivityTransform(res, thk, lam){
+  let tt = res[res.length - 1];
+  const nInterfaces = res.length - 1;
+  for (let k = 1; k <= nInterfaces; k++){
+    const i = nInterfaces - k;
+    const refl = (res[i] - tt) / (res[i] + tt) * Math.exp(-2.0 * thk[i] * lam);
+    tt = res[i] * (1.0 - refl) / (1.0 + refl);
+  }
+  return tt;
+}
+
+function forwardModelSchlumberger(res, thk, ab2Values){
+  const out = [];
+  for (const ab2 of ab2Values){
+    let x = Math.exp(YM6_Y1) / ab2;
+    let rr = 0.0;
+    for (let j = 0; j < YM6_FC.length; j++){
+      const tt = resistivityTransform(res, thk, x);
+      rr += YM6_FC[j] * tt;
+      x = x / YM6_F;
+    }
+    out.push(rr);
+  }
+  return out;
+}
+
+/* ---- Small dense linear solver: Gaussian elimination with partial pivoting ---- */
+function solveLinear(Ain, bin){
+  const n = bin.length;
+  const A = Ain.map(row => row.slice());
+  const b = bin.slice();
+  for (let col = 0; col < n; col++){
+    let piv = col;
+    for (let r = col+1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (Math.abs(A[piv][col]) < 1e-14) return null; // singular
+    if (piv !== col){ [A[piv], A[col]] = [A[col], A[piv]]; [b[piv], b[col]] = [b[col], b[piv]]; }
+    for (let r = col+1; r < n; r++){
+      const f = A[r][col] / A[col][col];
+      if (f === 0) continue;
+      for (let c = col; c < n; c++) A[r][c] -= f * A[col][c];
+      b[r] -= f * b[col];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let r = n-1; r >= 0; r--){
+    let s = b[r];
+    for (let c = r+1; c < n; c++) s -= A[r][c]*x[c];
+    x[r] = s / A[r][r];
+  }
+  return x;
+}
+
+/* ---- Numerical Jacobian (central differences) ---- */
+function numericalJacobian(residualsFn, x, r0){
+  const n = x.length, m = r0.length;
+  const J = Array.from({length: m}, () => new Array(n).fill(0));
+  for (let j = 0; j < n; j++){
+    const h = Math.max(1e-6, Math.abs(x[j]) * 1e-6);
+    const xp = x.slice(); xp[j] += h;
+    const xm = x.slice(); xm[j] -= h;
+    const rp = residualsFn(xp);
+    const rm = residualsFn(xm);
+    for (let i = 0; i < m; i++) J[i][j] = (rp[i] - rm[i]) / (2*h);
+  }
+  return J;
+}
+
+/* ---- Levenberg-Marquardt with Marquardt-scaled damping ----
+   Runs in the same bounded/transformed parameter space validated below
+   (sigmoid reparameterization), so the physical-bounds guarantee from the
+   earlier fix carries over unchanged; only the search method improved.
+   Verified against a textbook exponential-fit case (exact recovery) and
+   against real VES field datasets (matches / exceeds the prior Nelder-Mead
+   optimizer's results, converging far more reliably and roughly 5-10x
+   faster: single runs typically resolve in well under a second). */
+function levenbergMarquardt(residualsFn, x0, opts){
+  opts = opts || {};
+  const maxIter = opts.maxIter || 100;
+  const costTol = opts.costTol || 1e-12;
+  const n = x0.length;
+  let x = x0.slice();
+  let r = residualsFn(x);
+  let cost = r.reduce((s,v)=>s+v*v, 0);
+  let lambda = 1e-2;
+
+  for (let iter = 0; iter < maxIter; iter++){
+    const J = numericalJacobian(residualsFn, x, r);
+    const JtJ = Array.from({length:n}, ()=> new Array(n).fill(0));
+    const Jtr = new Array(n).fill(0);
+    for (let a = 0; a < n; a++){
+      for (let b = 0; b < n; b++){
+        let s = 0;
+        for (let i = 0; i < r.length; i++) s += J[i][a]*J[i][b];
+        JtJ[a][b] = s;
+      }
+      let sr = 0;
+      for (let i = 0; i < r.length; i++) sr += J[i][a]*r[i];
+      Jtr[a] = sr;
+    }
+
+    let improved = false;
+    for (let attempt = 0; attempt < 25; attempt++){
+      const A = JtJ.map((row,a)=> row.map((v,bIdx)=> a===bIdx ? v + lambda*Math.max(v, 1e-10) : v));
+      const rhs = Jtr.map(v => -v);
+      const delta = solveLinear(A, rhs);
+      if (!delta){ lambda *= 4; continue; }
+      const xTry = x.map((v,i)=> v + delta[i]);
+      const rTry = residualsFn(xTry);
+      const costTry = rTry.reduce((s,v)=>s+v*v, 0);
+      if (costTry < cost){
+        const rel = (cost - costTry) / Math.max(cost, 1e-300);
+        x = xTry; r = rTry; cost = costTry;
+        lambda = Math.max(lambda / 3, 1e-12);
+        improved = true;
+        if (rel < costTol) return {x, cost, iters: iter};
+        break;
+      } else {
+        lambda *= 4;
+      }
+    }
+    if (!improved) return {x, cost, iters: iter};
+  }
+  return {x, cost, iters: maxIter};
+}
+
+function buildSeeds(ab2Sorted, rhoSorted, nLayers){
+  const m = rhoSorted.length;
+  const chunkGuess = (basementMult) => {
+    const resGuess = [];
+    for (let i = 0; i < nLayers; i++){
+      const lo = Math.floor(i*m/nLayers), hi = Math.max(lo+1, Math.floor((i+1)*m/nLayers));
+      const chunk = rhoSorted.slice(lo, hi);
+      resGuess.push(Math.exp(chunk.reduce((s,v)=> s + Math.log(Math.max(v,1e-6)), 0) / chunk.length));
+    }
+    resGuess[resGuess.length-1] *= basementMult;
+    const thkGuess = [];
+    if (nLayers > 1){
+      const depthMax = Math.max(...ab2Sorted) * 0.35;
+      const depthMin = Math.max(ab2Sorted[0]*0.15, 0.3);
+      const nT = nLayers - 1;
+      let prev = 0;
+      for (let i = 1; i <= nT; i++){
+        const d = depthMin * Math.pow(depthMax/depthMin, i/nT);
+        thkGuess.push(Math.max(d - prev, 0.1));
+        prev = d;
+      }
+    }
+    return [resGuess, thkGuess];
+  };
+  // Several structured starting points, not just one: a real sounding curve
+  // still rising at its last spacing often hides a true basement resistivity
+  // far above the last few readings (equivalence), so we seed some attempts
+  // with an extrapolated-basement guess as well as the plain chunk average.
+  return [chunkGuess(1), chunkGuess(5), chunkGuess(20), chunkGuess(60)];
+}
+
+function sigmoid(x){ return 1 / (1 + Math.exp(-x)); }
+function logit(p){ p = Math.min(Math.max(p, 1e-9), 1-1e-9); return Math.log(p/(1-p)); }
+function boundedFromParam(param, loLog, hiLog){ return Math.pow(10, loLog + (hiLog-loLog)*sigmoid(param)); }
+function paramFromBounded(value, loLog, hiLog){
+  const clamped = Math.min(Math.max(value, Math.pow(10, loLog+0.001)), Math.pow(10, hiLog-0.001));
+  const t = (Math.log10(clamped) - loLog) / (hiLog - loLog);
+  return logit(t);
+}
+
+function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.resCeiling){
+  resCeiling = Math.min(resCeiling, MAX_RES_CEILING);
+  const sorted = dataPoints.slice().sort((a,b)=>a.ab2-b.ab2);
+  const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+
+  const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
+  const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
+  // Data-adaptive but generous physical bounds. Wide enough that a genuinely
+  // deep, highly resistive basement (equivalence lets these run well beyond
+  // the observed curve) is still reachable; narrow enough that the optimizer
+  // can no longer drift into numerical-artifact values with no physical
+  // meaning (the root cause of the earlier degenerate results).
+  const resLoLog = Math.log10(minObsRho) - Math.log10(50);
+  const resHiLog = Math.log10(maxObsRho) + Math.log10(200);
+  const deepResHiLog = Math.min(resHiLog, Math.log10(resCeiling));
+  const resHiLogFor = (i) => (i === nLayers - 1) ? deepResHiLog : resHiLog;
+  const thkFloor = Math.max(0.05 * minAb2, 0.15); // can't resolve thinner than this
+  const thkCeil = Math.max(maxAb2, thkFloor * 10); // depth-of-investigation cap: a VES sounding cannot reliably resolve depths beyond roughly its max AB/2
+  const thkLoLog = Math.log10(thkFloor), thkHiLog = Math.log10(thkCeil);
+
+  function decode(params){
+    const res = params.slice(0,nLayers).map((p,i) => boundedFromParam(p, resLoLog, resHiLogFor(i)));
+    const thk = params.slice(nLayers).map(p => boundedFromParam(p, thkLoLog, thkHiLog));
+    return [res, thk];
+  }
+  function residuals(params){
+    const [res, thk] = decode(params);
+    let predicted;
+    try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+    catch(e){ return ab2List.map(()=>1e6); }
+    return rhoList.map((obs,i) => {
+      const pred = predicted[i];
+      if (!(pred > 0) || !isFinite(pred)) return 1e6;
+      return Math.log10(obs) - Math.log10(pred);
+    });
+  }
+
+  const seeds = buildSeeds(ab2List, rhoList, nLayers);
+  let best = null;
+  for (const [resGuess, thkGuess] of seeds){
+    const baseX0 = resGuess.map((r,i) => paramFromBounded(r, resLoLog, resHiLogFor(i)))
+      .concat(thkGuess.map(t => paramFromBounded(t, thkLoLog, thkHiLog)));
+    for (let attempt = 0; attempt < restartsPerSeed; attempt++){
+      const x0 = attempt === 0 ? baseX0 : baseX0.map(v => v + (Math.random()*1.6 - 0.8));
+      const cand = levenbergMarquardt(residuals, x0, {maxIter: 100});
+      if (!best || cand.cost < best.cost) best = cand;
+    }
+  }
+  const [finalRes, finalThk] = decode(best.x);
+  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+  const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
+  const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
+
+  const depths = []; let running = 0;
+  for (const t of finalThk){ running += t; depths.push(running); }
+
+  return {
+    nLayers, resistivities: finalRes, thicknesses: finalThk, depths, rmsPercent,
+    observed: ab2List.map((x,i)=>[x, rhoList[i]]),
+    predicted: ab2List.map((x,i)=>[x, predicted[i]]),
+  };
+}
+
+/* =========================================================================
+   ADAPTIVE OCCAM-STYLE SMOOTHED INVERSION (discrepancy principle)
+   ---------------------------------------------------------------------
+   A second, distinct fitting philosophy offered alongside the best-fit
+   result above -- never silently replacing it. Rather than the single
+   best fit to the raw data (which can chase small non-geological wiggles
+   into an unrealistically thin, extreme layer), this searches for the
+   SMOOTHEST model whose fit is still within a bounded, data-adaptive
+   tolerance of that best-fit's own achievable misfit.
+
+   The tolerance is tied to the data's own best achievable fit rather than
+   a fixed constant: when the data already supports an exact, unambiguous
+   fit (clean or lightly-noisy data), the tolerance shrinks to ~0 and this
+   reduces to the ordinary best-fit result. Regularization only engages
+   when the raw best fit itself requires an unstable, extreme configuration
+   to achieve -- exactly the failure mode this was built to address.
+
+   Verified: preserves exact recovery on clean synthetic data regardless of
+   relaxation factor (baseline cost ~0 forces near-zero smoothing). On real
+   field data with a drilled-borehole ground truth, it moved a badly wrong
+   result (1.3 m apparent overburden) to within ~2% of the true depth
+   (17.3 m vs. ~17 m drilled). But on a different real dataset it pushed
+   the model further from the best available cross-check (another
+   inversion package's result) rather than closer -- so this is offered as
+   a second, clearly-labeled lens for comparison, not a replacement. Which
+   of the two is closer to the truth at a given site is a judgment call the
+   app cannot make on its own; local geological knowledge (a nearby
+   borehole, known stratigraphy) is what actually resolves it.
+   ========================================================================= */
+function adaptiveSmoothFromBaseline(dataResidualsFn, decodeFn, baselineX, baselineCost, relaxationFactor){
+  function dataCostOf(params){ return dataResidualsFn(params).reduce((s,v)=>s+v*v, 0); }
+  function fullResiduals(params, mu){
+    const [res] = decodeFn(params);
+    const rough = [];
+    for (let i = 0; i < res.length - 1; i++) rough.push(Math.sqrt(mu) * (Math.log10(res[i+1]) - Math.log10(res[i])));
+    return dataResidualsFn(params).concat(rough);
+  }
+  const targetCost = baselineCost * relaxationFactor + 1e-10;
+  let curX = baselineX, curMu = 0;
+  let lastGood = { x: curX, mu: 0 };
+  let overshootMu = null;
+  for (let iter = 0; iter < 40; iter++){
+    const mu = curMu === 0 ? 1e-6 : curMu * 2;
+    const cand = levenbergMarquardt(p => fullResiduals(p, mu), curX, {maxIter: 100});
+    if (dataCostOf(cand.x) <= targetCost){
+      lastGood = { x: cand.x, mu };
+      curX = cand.x; curMu = mu;
+    } else {
+      overshootMu = mu;
+      break;
+    }
+  }
+  if (overshootMu){
+    let loMu = lastGood.mu || 1e-7, hiMu = overshootMu, bestX = lastGood.x;
+    for (let b = 0; b < 14; b++){
+      const midMu = Math.sqrt(loMu * hiMu);
+      const cand = levenbergMarquardt(p => fullResiduals(p, midMu), bestX, {maxIter: 80});
+      if (dataCostOf(cand.x) <= targetCost){ bestX = cand.x; loMu = midMu; }
+      else hiMu = midMu;
+    }
+    lastGood = { x: bestX, mu: loMu };
+  }
+  return lastGood.x;
+}
+function invert1DModelSmoothed(dataPoints, nLayers, opts){
+  opts = opts || {};
+  const restartsPerSeed = opts.restartsPerSeed || 6;
+  const relaxationFactor = opts.relaxationFactor || 1.3;
+  const resCeiling = Math.min(opts.resCeiling || state.resCeiling, MAX_RES_CEILING);
+
+  const sorted = dataPoints.slice().sort((a,b)=>a.ab2-b.ab2);
+  const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+
+  const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
+  const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
+  const resLoLog = Math.log10(minObsRho) - Math.log10(50);
+  const resHiLog = Math.log10(maxObsRho) + Math.log10(200);
+  const deepResHiLog = Math.min(resHiLog, Math.log10(resCeiling));
+  const resHiLogFor = (i) => (i === nLayers - 1) ? deepResHiLog : resHiLog;
+  const thkFloor = Math.max(0.05 * minAb2, 0.15);
+  const thkCeil = Math.max(maxAb2, thkFloor * 10);
+  const thkLoLog = Math.log10(thkFloor), thkHiLog = Math.log10(thkCeil);
+
+  function decode(params){
+    return [ params.slice(0,nLayers).map((p,i) => boundedFromParam(p, resLoLog, resHiLogFor(i))),
+             params.slice(nLayers).map(p => boundedFromParam(p, thkLoLog, thkHiLog)) ];
+  }
+  function dataResiduals(params){
+    const [res, thk] = decode(params);
+    let predicted;
+    try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+    catch(e){ return ab2List.map(()=>1e3); }
+    return rhoList.map((obs,i) => {
+      const pred = predicted[i];
+      if (!(pred > 0) || !isFinite(pred)) return 1e3;
+      return Math.log10(obs) - Math.log10(pred);
+    });
+  }
+
+  const seeds = buildSeeds(ab2List, rhoList, nLayers);
+  let baseline = null;
+  for (const [resGuess, thkGuess] of seeds){
+    const baseX0 = resGuess.map((r,i) => paramFromBounded(r, resLoLog, resHiLogFor(i)))
+      .concat(thkGuess.map(t => paramFromBounded(t, thkLoLog, thkHiLog)));
+    for (let attempt = 0; attempt < restartsPerSeed; attempt++){
+      const x0 = attempt === 0 ? baseX0 : baseX0.map(v => v + (Math.random()*1.6 - 0.8));
+      const cand = levenbergMarquardt(dataResiduals, x0, {maxIter: 100});
+      if (!baseline || cand.cost < baseline.cost) baseline = cand;
+    }
+  }
+
+  const finalX = adaptiveSmoothFromBaseline(dataResiduals, decode, baseline.x, baseline.cost, relaxationFactor);
+  const [finalRes, finalThk] = decode(finalX);
+  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+  const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
+  const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
+  const depths = []; let running = 0;
+  for (const t of finalThk){ running += t; depths.push(running); }
+
+  return {
+    nLayers, resistivities: finalRes, thicknesses: finalThk, depths, rmsPercent,
+    observed: ab2List.map((x,i)=>[x, rhoList[i]]),
+    predicted: ab2List.map((x,i)=>[x, predicted[i]]),
+  };
+}
+
+/* =========================================================================
+   ICONS (hand-drawn line icons, no external icon font)
+   ========================================================================= */
+const ICONS = {
+  setup: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19.9a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H4.1a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.55-1.1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10a1.7 1.7 0 0 0 1-1.55V4.1a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V10a1.7 1.7 0 0 0 1.55 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.55 1z"/></svg>`,
+  log: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M12 11v6M9 14h6"/></svg>`,
+  data: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9 4.5v15"/></svg>`,
+  analyze: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>`,
+  export: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 17.25V20h2.75L17 9.75l-2.75-2.75L4 17.25z"/><path d="M14.5 5.5l2.75 2.75"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+  bolt: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h6l-1 8 11-14h-6z"/></svg>`,
+  pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`,
+  map: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>`,
+  download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>`,
+};
+
+const NAV_ITEMS = [
+  ['setup','Setup'], ['log','Log'], ['data','Data'], ['analyze','Analyze'], ['export','Export']
+];
+
+/* =========================================================================
+   CHART BUILDER (log-log, graph-paper styled SVG)
+   ========================================================================= */
+function niceLogBounds(vals){
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  let loE = Math.floor(Math.log10(lo));
+  let hiE = Math.ceil(Math.log10(hi));
+  if (hiE <= loE) hiE = loE + 1;
+  return [loE, hiE];
+}
+function fmtPow(v){
+  const n = Number(v.toPrecision(3));
+  return n >= 1000 ? n.toExponential(0).replace('+','') : n.toString();
+}
+function buildLogLogChart(seriesList, opts){
+  opts = opts || {};
+  const W = opts.width || 400, H = opts.height || 250;
+  const padL = 34, padR = 10, padT = 10, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  let allX = [], allY = [];
+  seriesList.forEach(s => s.points.forEach(p => { allX.push(p[0]); allY.push(p[1]); }));
+  if (!allX.length) return '<div class="empty"><div class="t">Nothing to plot yet</div></div>';
+  const [xLoE, xHiE] = niceLogBounds(allX);
+  const [yLoE, yHiE] = niceLogBounds(allY);
+  const xScale = v => padL + ((Math.log10(v) - xLoE) / (xHiE - xLoE)) * plotW;
+  const yScale = v => padT + plotH - ((Math.log10(v) - yLoE) / (yHiE - yLoE)) * plotH;
+
+  let grid = '';
+  for (let e = xLoE; e <= xHiE; e++){
+    for (let m = 1; m <= 9; m++){
+      if (e === xHiE && m > 1) break;
+      const v = m * Math.pow(10, e);
+      const x = xScale(v), major = m === 1;
+      grid += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${padT+plotH}" stroke="${major?'rgba(120,72,22,0.45)':'rgba(120,72,22,0.15)'}" stroke-width="${major?1:0.5}"/>`;
+      if (major) grid += `<text x="${x.toFixed(1)}" y="${padT+plotH+14}" font-size="8.5" fill="#7a715f" text-anchor="middle" font-family="JetBrains Mono">${fmtPow(v)}</text>`;
+    }
+  }
+  for (let e = yLoE; e <= yHiE; e++){
+    for (let m = 1; m <= 9; m++){
+      if (e === yHiE && m > 1) break;
+      const v = m * Math.pow(10, e);
+      const y = yScale(v), major = m === 1;
+      grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL+plotW}" y2="${y.toFixed(1)}" stroke="${major?'rgba(120,72,22,0.45)':'rgba(120,72,22,0.15)'}" stroke-width="${major?1:0.5}"/>`;
+      if (major) grid += `<text x="${padL-5}" y="${(y+2.8).toFixed(1)}" font-size="8.5" fill="#7a715f" text-anchor="end" font-family="JetBrains Mono">${fmtPow(v)}</text>`;
+    }
+  }
+
+  let seriesSvg = '';
+  seriesList.forEach(s => {
+    const pts = s.points.slice().sort((a,b)=>a[0]-b[0]);
+    if (s.style === 'line'){
+      const d = pts.map((p,i)=> `${i===0?'M':'L'}${xScale(p[0]).toFixed(1)},${yScale(p[1]).toFixed(1)}`).join(' ');
+      const dash = s.dashArray || (s.dashed ? '4,3' : 'none');
+      seriesSvg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.strokeWidth || 1.6}" stroke-dasharray="${dash}"/>`;
+    } else {
+      pts.forEach(p => {
+        seriesSvg += `<circle cx="${xScale(p[0]).toFixed(1)}" cy="${yScale(p[1]).toFixed(1)}" r="3.2" fill="${s.color}" stroke="#ffffff" stroke-width="0.9"/>`;
+      });
+    }
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block; width:100%; height:auto;"><rect width="${W}" height="${H}" fill="#ffffff"/>${grid}${seriesSvg}
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(120,72,22,0.55)" stroke-width="1"/>
+  </svg>`;
+}
+
+/* Builds the "block model" step function VES practitioners overlay on the
+   sounding curve (as seen in WinResist/IPI2Win): a staircase of the layer
+   model's own resistivities plotted against depth, on the same log-x axis
+   as the apparent-resistivity curve. Not a physically identical quantity to
+   apparent resistivity (it's true resistivity vs. depth, not apparent
+   resistivity vs. AB/2), but this overlay is the standard VES convention
+   for visually comparing the interpreted layers against the field curve. */
+function buildLayerStaircase(model, ab2List){
+  const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
+  // The left extension must sit at or below the SMALLEST layer boundary,
+  // not just below the smallest AB/2 reading: a thin near-surface layer's
+  // own depth can be smaller than the shallowest spacing used, and starting
+  // the staircase to the right of that boundary made its first segment
+  // run backwards (large x to small x) before turning around -- the exact
+  // "glitch" this was built to fix. Snapping to exact log-decade boundaries
+  // (rather than an arbitrary multiplier) is also what makes the staircase
+  // touch the chart's own axis edges exactly, since the axis itself is
+  // computed the same way, and it avoids needlessly widening the plotted
+  // range beyond what the data requires.
+  const smallestBoundary = model.depths.length ? model.depths[0] : minAb2;
+  const leftBound = Math.min(minAb2, smallestBoundary);
+  const leftX = Math.pow(10, Math.floor(Math.log10(leftBound)));
+  const rightX = Math.pow(10, Math.ceil(Math.log10(maxAb2)));
+  const pts = [];
+  let xStart = leftX;
+  for (let i = 0; i < model.nLayers; i++){
+    const isLast = i === model.nLayers - 1;
+    const xEnd = isLast ? rightX : model.depths[i];
+    if (pts.length === 0) pts.push([xStart, model.resistivities[i]]);
+    pts.push([xEnd, model.resistivities[i]]);
+    if (!isLast) pts.push([xEnd, model.resistivities[i+1]]);
+    xStart = xEnd;
+  }
+  return pts;
+}
+
+/* =========================================================================
+   IMAGE DOWNLOAD (charts + model diagram, rendered SVG -> PNG via canvas)
+   ========================================================================= */
+function svgStringToPngDownload(svgString, filename){
+  if (!svgString.includes('xmlns=')) svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  // Require a tag-boundary or whitespace before "width="/"height=" so this
+  // never matches inside an unrelated attribute like stroke-width="...".
+  const widthMatch = svgString.match(/[\s<]width="([\d.]+)"/);
+  const heightMatch = svgString.match(/[\s<]height="([\d.]+)"/);
+  const w = widthMatch ? parseFloat(widthMatch[1]) : 400;
+  const h = heightMatch ? parseFloat(heightMatch[1]) : 250;
+  const svgBlob = new Blob([svgString], {type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = function(){
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = w * scale; canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(function(blob){
+      const dlUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = dlUrl; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(dlUrl);
+    }, 'image/png');
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); };
+  img.src = url;
+}
+function downloadChartFrame(containerId, filename){
+  // Direct-child selector: the container also holds the small download-icon
+  // <svg> nested inside .chart-dl, which a plain descendant selector would
+  // match first (it's earlier in the DOM) and grab the wrong dimensions from.
+  const svgEl = document.querySelector(`#${containerId} > svg`);
+  if (!svgEl) return;
+  svgStringToPngDownload(svgEl.outerHTML, filename);
+}
+function stationSlug(){ return (state.metadata.station || 'station').replace(/\s+/g, '_'); }
+
+/* =========================================================================
+   LAYER STICK VISUAL
+   ========================================================================= */
+function resistivityColor(rho, minLog, maxLog){
+  const stops = [ [0.0,[62,124,116]], [0.35,[138,171,92]], [0.65,[232,163,61]], [1.0,[178,58,46]] ];
+  const t = maxLog === minLog ? 0.5 : (Math.log10(rho) - minLog) / (maxLog - minLog);
+  const tc = Math.max(0, Math.min(1, t));
+  let c0 = stops[0], c1 = stops[stops.length-1];
+  for (let i = 0; i < stops.length-1; i++){
+    if (tc >= stops[i][0] && tc <= stops[i+1][0]){ c0 = stops[i]; c1 = stops[i+1]; break; }
+  }
+  const span = (c1[0]-c0[0]) || 1;
+  const lt = (tc - c0[0]) / span;
+  const rgb = c0[1].map((v,i)=> Math.round(v + (c1[1][i]-v)*lt));
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+function renderLayerStick(model){
+  const res = model.resistivities, thk = model.thicknesses;
+  const logs = res.map(r=>Math.log10(Math.max(r,1e-3)));
+  const minLog = Math.min(...logs), maxLog = Math.max(...logs);
+  const totalFiniteThk = thk.reduce((a,b)=>a+b,0) || 1;
+  let stickHtml = '', rowsHtml = '';
+  for (let i = 0; i < model.nLayers; i++){
+    const color = resistivityColor(res[i], minLog, maxLog);
+    const isLast = i === model.nLayers - 1;
+    const h = isLast ? 56 : Math.max(20, (thk[i]/totalFiniteThk) * 150);
+    stickHtml += `<div class="layer${isLast?' basement':''}" style="height:${h.toFixed(0)}px; background:${color};"></div>`;
+    const thickCell = isLast ? '\u221E' : thk[i].toFixed(1);
+    const depthCell = isLast ? '\u2014' : model.depths[i].toFixed(1);
+    rowsHtml += `<tr><td><span class="swatch" style="background:${color}"></span>${i+1}</td><td>${thickCell}</td><td>${depthCell}</td><td>${res[i].toFixed(1)}</td></tr>`;
+  }
+  const tableHtml = `
+    <table class="layer-table">
+      <thead><tr><th>Layer</th><th>Layer thickness (m)</th><th>Depth (m)</th><th>Resistivity (\u03A9\u00B7m)</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  return `<div class="stick-wrap"><div class="stick">${stickHtml}</div>${tableHtml}</div>`;
+}
+
+function buildModelSummarySvg(model){
+  const res = model.resistivities, thk = model.thicknesses;
+  const logs = res.map(r=>Math.log10(Math.max(r,1e-3)));
+  const minLog = Math.min(...logs), maxLog = Math.max(...logs);
+  const totalFiniteThk = thk.reduce((a,b)=>a+b,0) || 1;
+
+  const W = 720, pad = 24, headerH = 56, footerH = 36;
+  const stickX = pad, stickW = 100, stickGap = 6;
+  const availableStickHeight = 176, basementHeight = 64;
+  const tableX = stickX + stickW + 24, tableW = W - tableX - pad;
+  const theadH = 28, rowH = 40;
+
+  // left-hand stacked stick (same proportions/colors as the on-screen layer stick)
+  let stickRows = '', sy = headerH;
+  for (let i = 0; i < model.nLayers; i++){
+    const isLast = i === model.nLayers - 1;
+    const h = isLast ? basementHeight : Math.max(18, (thk[i]/totalFiniteThk) * availableStickHeight);
+    const color = resistivityColor(res[i], minLog, maxLog);
+    stickRows += `<rect x="${stickX}" y="${sy.toFixed(1)}" width="${stickW}" height="${h.toFixed(1)}" fill="${color}" stroke="#332f28" stroke-width="0.6"/>`;
+    if (isLast){
+      stickRows += `<rect x="${stickX}" y="${sy.toFixed(1)}" width="${stickW}" height="${h.toFixed(1)}" fill="url(#hatch)"/>`;
+    }
+    sy += h + stickGap;
+  }
+  const stickBottom = sy - stickGap;
+
+  // right-hand tabulated layer data, matching the on-screen layer table
+  const colLayer = tableX, colThick = tableX + tableW*0.42, colDepth = tableX + tableW*0.66, colRes = tableX + tableW;
+  let tableHead = `
+    <text x="${colLayer.toFixed(1)}" y="${(headerH+18).toFixed(1)}" font-size="10" font-weight="700" fill="#a89d89" font-family="JetBrains Mono" letter-spacing="0.5">LAYER</text>
+    <text x="${colThick.toFixed(1)}" y="${(headerH+18).toFixed(1)}" font-size="10" font-weight="700" fill="#a89d89" font-family="JetBrains Mono" text-anchor="middle" letter-spacing="0.5">THICKNESS (M)</text>
+    <text x="${colDepth.toFixed(1)}" y="${(headerH+18).toFixed(1)}" font-size="10" font-weight="700" fill="#a89d89" font-family="JetBrains Mono" text-anchor="middle" letter-spacing="0.5">DEPTH (M)</text>
+    <text x="${colRes.toFixed(1)}" y="${(headerH+18).toFixed(1)}" font-size="10" font-weight="700" fill="#a89d89" font-family="JetBrains Mono" text-anchor="end" letter-spacing="0.5">RESISTIVITY (\u03A9\u00B7M)</text>
+    <line x1="${tableX}" y1="${(headerH+theadH).toFixed(1)}" x2="${(tableX+tableW).toFixed(1)}" y2="${(headerH+theadH).toFixed(1)}" stroke="#d8cdb8" stroke-width="1"/>`;
+
+  let tableRows = '', ty = headerH + theadH;
+  for (let i = 0; i < model.nLayers; i++){
+    const isLast = i === model.nLayers - 1;
+    const color = resistivityColor(res[i], minLog, maxLog);
+    const thickCell = isLast ? '\u221E' : thk[i].toFixed(1);
+    const depthCell = isLast ? '\u2014' : model.depths[i].toFixed(1);
+    const midY = ty + rowH/2;
+    if (i > 0){
+      tableRows += `<line x1="${tableX}" y1="${ty.toFixed(1)}" x2="${(tableX+tableW).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="#e7ded0" stroke-width="1" stroke-dasharray="2,2"/>`;
+    }
+    tableRows += `<rect x="${colLayer.toFixed(1)}" y="${(midY-5).toFixed(1)}" width="9" height="9" rx="2" fill="${color}" stroke="#332f28" stroke-width="0.5"/>`;
+    tableRows += `<text x="${(colLayer+16).toFixed(1)}" y="${(midY+4).toFixed(1)}" font-size="12" fill="#76695c" font-family="JetBrains Mono">${i+1}</text>`;
+    tableRows += `<text x="${colThick.toFixed(1)}" y="${(midY+4).toFixed(1)}" font-size="12" fill="#76695c" font-family="JetBrains Mono" text-anchor="middle">${thickCell}</text>`;
+    tableRows += `<text x="${colDepth.toFixed(1)}" y="${(midY+4).toFixed(1)}" font-size="12" fill="#76695c" font-family="JetBrains Mono" text-anchor="middle">${depthCell}</text>`;
+    tableRows += `<text x="${colRes.toFixed(1)}" y="${(midY+4).toFixed(1)}" font-size="12" font-weight="700" fill="#332f28" font-family="JetBrains Mono" text-anchor="end">${res[i].toFixed(1)}</text>`;
+    ty += rowH;
+  }
+  const tableBottom = ty;
+  const contentBottom = Math.max(stickBottom, tableBottom);
+
+  // RMS misfit / layer-count stat boxes, matching the on-screen stat grid
+  const showStats = model.source === 'invert' || model.refined;
+  let statsHtml = '', afterStatsY = contentBottom + 14;
+  if (showStats){
+    const statY = contentBottom + 18, statH = 54, statGap = 12;
+    const statW = (W - 2*pad - statGap) / 2;
+    const stat2X = pad + statW + statGap;
+    statsHtml = `
+      <rect x="${pad}" y="${statY.toFixed(1)}" width="${statW.toFixed(1)}" height="${statH}" rx="5" fill="#f3efe4" stroke="#e7ded0" stroke-width="1"/>
+      <text x="${(pad+14).toFixed(1)}" y="${(statY+25).toFixed(1)}" font-size="18" font-weight="700" fill="#332f28" font-family="Space Grotesk">${model.rmsPercent.toFixed(1)}%</text>
+      <text x="${(pad+14).toFixed(1)}" y="${(statY+41).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">RMS misfit</text>
+      <rect x="${stat2X.toFixed(1)}" y="${statY.toFixed(1)}" width="${statW.toFixed(1)}" height="${statH}" rx="5" fill="#f3efe4" stroke="#e7ded0" stroke-width="1"/>
+      <text x="${(stat2X+14).toFixed(1)}" y="${(statY+25).toFixed(1)}" font-size="18" font-weight="700" fill="#332f28" font-family="Space Grotesk">${model.nLayers}</text>
+      <text x="${(stat2X+14).toFixed(1)}" y="${(statY+41).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">Layers</text>`;
+    afterStatsY = statY + statH + 14;
+  }
+
+  const H = afterStatsY + footerH - 14;
+
+  const title = `Interpreted 1D Earth Model${state.metadata.station ? ' \u2014 ' + state.metadata.station : ''}`;
+  const subtitle = model.source === 'invert' ? `${model.nLayers} layers \u00B7 RMS misfit ${model.rmsPercent.toFixed(2)}%` : `${model.nLayers} layers \u00B7 designed model`;
+
+  // NOTE: this string is loaded into an <img> as image/svg+xml, which parses
+  // as strict XML -- only the five predefined XML entities are valid there,
+  // so text content must use literal unicode characters (e.g. \u00B7), never
+  // HTML-only named entities like &middot; (those silently fail img.onload
+  // with no visible error, which is why this used to look like a dead button).
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs><pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(0,0,0,0.22)" stroke-width="3"/></pattern></defs>
+    <rect width="${W}" height="${H}" fill="#ffffff"/>
+    <text x="${pad}" y="28" font-size="15" font-weight="700" fill="#332f28" font-family="Space Grotesk">${title}</text>
+    <text x="${pad}" y="44" font-size="11" fill="#a89d89" font-family="JetBrains Mono">${subtitle}</text>
+    ${stickRows}
+    ${tableHead}
+    ${tableRows}
+    ${statsHtml}
+    <text x="${pad}" y="${(H-12).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">VES Field Assistant v${APP_VERSION} \u00B7 Powered by Asije Labs</text>
+  </svg>`;
+}
+function downloadModelImage(model){
+  svgStringToPngDownload(buildModelSummarySvg(model), `VES_Model_${stationSlug()}.png`);
+}
+
+/* =========================================================================
+   RENDER: SHELL, TOPBAR, NAV
+   ========================================================================= */
+function el(id){ return document.getElementById(id); }
+
+function render(){
+  renderStatus();
+  renderNav();
+  const panel = el('panel');
+  if (state.tab === 'setup') panel.innerHTML = viewSetup();
+  else if (state.tab === 'log') panel.innerHTML = viewLog();
+  else if (state.tab === 'data') panel.innerHTML = viewData();
+  else if (state.tab === 'analyze') panel.innerHTML = viewAnalyze();
+  else if (state.tab === 'export') panel.innerHTML = viewExport();
+  panel.scrollTop = 0;
+  scheduleSessionSave();
+}
+
+function renderStatus(){
+  const info = ARRAY_INFO[state.arrayType];
+  el('status-row').innerHTML = `
+    <span class="chip"><b>${state.metadata.station || 'No station'}</b></span>
+    <span class="chip"><b>${info.code}</b></span>
+    <span class="chip">${state.data.length} pt${state.data.length===1?'':'s'}</span>
+    ${state.lastModel ? `<span class="chip"><b>${state.lastModel.nLayers}L</b> model</span>` : ''}
+  `;
+}
+
+function renderNav(){
+  el('nav').innerHTML = NAV_ITEMS.map(([key,label])=>
+    `<button class="${state.tab===key?'active':''}" onclick="setTab('${key}')">${ICONS[key]}<span>${label}</span></button>`
+  ).join('');
+}
+
+function setTab(tab){ state.tab = tab; render(); }
+
+/* =========================================================================
+   VIEW: SETUP
+   ========================================================================= */
+/* =========================================================================
+   LOCATION (Geolocation API) -- pulls the device's current GPS coordinates
+   into the survey metadata on request.
+
+   Important scope note: this does not require an internet connection in
+   the sense of network signal at the survey site -- most phones can get a
+   GPS fix purely from satellites, offline, once they have a clear view of
+   the sky. What it DOES require is that this page be loaded from a secure
+   context (an https:// address, or localhost) -- browsers block the
+   Geolocation API entirely on insecure origins such as a file opened
+   directly from disk or through Android's content:// file picker. If the
+   button below does nothing or errors immediately, that is almost
+   certainly why -- see the error message it shows for what to do about it.
+   ========================================================================= */
+function acquireLocation(){
+  if (!navigator.geolocation){
+    state.gpsError = 'Location access is not available in this browser.';
+    render();
+    return;
+  }
+  state.gpsFetching = true;
+  state.gpsError = null;
+  state.gpsNote = null;
+  render();
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude.toFixed(6);
+      const lng = position.coords.longitude.toFixed(6);
+      state.metadata.gps = `Lat: ${lat}, Long: ${lng}`;
+      state.gpsFetching = false;
+      state.gpsError = null;
+      state.gpsNote = `Accuracy: \u00B1${Math.round(position.coords.accuracy)}m`;
+      render();
+    },
+    (error) => {
+      state.gpsFetching = false;
+      let msg = 'Could not get your location.';
+      if (error.code === error.PERMISSION_DENIED){
+        msg = 'Location permission was denied. If this page was opened as a local file (not a proper https:// or localhost address), the browser may be blocking location access entirely regardless of permission. Otherwise, check your browser\u2019s site settings for this page and allow location access, then try again.';
+      } else if (error.code === error.POSITION_UNAVAILABLE){
+        msg = 'Location unavailable \u2014 try moving to a spot with a clearer view of the sky, then try again.';
+      } else if (error.code === error.TIMEOUT){
+        msg = 'Location request timed out \u2014 try again.';
+      }
+      state.gpsError = msg;
+      render();
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// Parses the "Lat: X, Long: Y" format this app stores GPS coordinates in.
+// The "Lat:"/"Long:" prefixes are optional and case-insensitive -- older
+// sessions saved before this format was added used a bare "X, Y", and that
+// still parses correctly so existing saved stations keep working. Returns
+// {lat, lng} or null if the string isn't in a recognizable form.
+function parseGpsString(gpsStr){
+  if (!gpsStr) return null;
+  const match = gpsStr.trim().match(/^(?:lat\.?:?\s*)?(-?\d+(?:\.\d+)?)\s*,\s*(?:lon(?:g)?\.?:?\s*|lng:?\s*)?(-?\d+(?:\.\d+)?)$/i);
+  if (!match) return null;
+  const lat = parseFloat(match[1]), lng = parseFloat(match[2]);
+  if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function viewSetup(){
+  const opts = Object.keys(ARRAY_INFO);
+  return `
+    <div class="section-title">Survey setup</div>
+    <div class="section-sub">Station details and electrode array configuration for this sounding.</div>
+
+    <label>Project name</label>
+    <input type="text" value="${escAttr(state.metadata.project)}" placeholder="e.g. Ogbe-East Borehole Survey" oninput="state.metadata.project=this.value; renderStatus();">
+
+    <label>Station ID</label>
+    <input type="text" value="${escAttr(state.metadata.station)}" placeholder="e.g. ST-05" oninput="state.metadata.station=this.value; renderStatus();">
+
+    <label>Geologist</label>
+    <input type="text" value="${escAttr(state.metadata.geologist)}" placeholder="e.g. A. Okafor" oninput="state.metadata.geologist=this.value;">
+
+    <label>GPS coordinates</label>
+    <div style="display:flex; gap:8px; align-items:stretch;">
+      <input type="text" style="flex:1;" value="${escAttr(state.metadata.gps)}" placeholder="e.g. Lat: 6.3350, Long: 5.6037" oninput="state.metadata.gps=this.value;">
+      <button type="button" class="btn ghost" style="white-space:nowrap; padding:0 14px; display:flex; align-items:center; gap:6px;" onclick="acquireLocation()" ${state.gpsFetching ? 'disabled' : ''}>
+        ${state.gpsFetching ? '<span class="spinner"></span>' : ICONS.pin}<span>${state.gpsFetching ? 'Locating\u2026' : 'Use location'}</span>
+      </button>
+    </div>
+    ${state.gpsError ? `<div class="alert err" style="margin-top:8px;">${ICONS.close}<div>${state.gpsError}</div></div>` : ''}
+    ${state.gpsNote ? `<div class="section-sub" style="margin-top:6px;">${state.gpsNote}</div>` : ''}
+    ${parseGpsString(state.metadata.gps) ? `
+      <button type="button" class="btn block" style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="downloadLocationMap()">
+        ${ICONS.map}<span>Download map of this location</span>
+      </button>
+    ` : ''}
+
+    <div class="divider"></div>
+    <div class="section-title">Electrode array</div>
+    <div class="section-sub">Applies to new readings. Existing logged points keep the array type they were recorded with.</div>
+    <div class="array-pick">
+      ${opts.map(o => `
+        <div class="array-opt ${state.arrayType===o?'active':''}" onclick="selectArray('${o}')">
+          <div><div class="name">${o}</div><div class="desc">${ARRAY_INFO[o].desc}</div></div>
+          <div class="radio"></div>
+        </div>`).join('')}
+    </div>
+  `;
+}
+function selectArray(type){ state.arrayType = type; render(); }
+function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+/* =========================================================================
+   VIEW: LOG READING
+   ========================================================================= */
+let logError = '';
+
+function viewLog(){
+  const isRhoMode = state.logMode === 'resistivity';
+  return `
+    <div class="section-title">Log a reading</div>
+    <div class="section-sub">Array: <b style="color:var(--text)">${state.arrayType}</b> &mdash; change this on the Setup tab.</div>
+    ${logError ? `<div class="alert err">${ICONS.close}<div>${logError}</div></div>` : ''}
+    <label>Entry mode</label>
+    <div class="seg">
+      <button class="${!isRhoMode?'active':''}" onclick="state.logMode='full'; render();">Full reading</button>
+      <button class="${isRhoMode?'active':''}" onclick="state.logMode='resistivity'; render();">AB/2 + Resistivity</button>
+    </div>
+    <div class="section-sub" style="margin-top:-8px;">${isRhoMode
+      ? "For data where apparent resistivity is already known (a prior survey, another instrument, a digitized record) and the raw resistance/MN\u20442 behind it isn't available."
+      : "Standard field entry \u2014 computes apparent resistivity from your meter reading and electrode geometry."}</div>
+    <div class="card">
+      <label>Current spacing AB/2 (m)</label>
+      <input type="number" id="f-ab2" step="any" placeholder="e.g. 10" value="${state.logFormValues['f-ab2']}"
+        oninput="state.logFormValues['f-ab2']=this.value">
+      ${isRhoMode ? `
+      <label>Apparent Resistivity (\u03A9\u00B7m)</label>
+      <input type="number" id="f-rho" step="any" placeholder="e.g. 150" value="${state.logFormValues['f-rho']}"
+        oninput="state.logFormValues['f-rho']=this.value">
+      ` : `
+      <label>Potential spacing MN/2 (m)</label>
+      <input type="number" id="f-mn2" step="any" placeholder="e.g. 2" value="${state.logFormValues['f-mn2']}"
+        oninput="state.logFormValues['f-mn2']=this.value">
+      <label>Resistance R (\u03A9)</label>
+      <input type="number" id="f-r" step="any" placeholder="reading from meter" value="${state.logFormValues['f-r']}"
+        oninput="state.logFormValues['f-r']=this.value">
+      `}
+      <div class="btn-row">
+        <button class="btn primary block" onclick="submitReading()">Log point</button>
+      </div>
+    </div>
+  `;
+}
+function submitReading(){
+  logError = '';
+  const info = ARRAY_INFO[state.arrayType];
+  try {
+    const ab2 = parseFloat(el('f-ab2').value);
+    if (isNaN(ab2)) throw new Error('Enter a valid AB/2 value.');
+
+    let mn2 = null, r = null, k = null, rho;
+    if (state.logMode === 'resistivity'){
+      rho = parseFloat(el('f-rho').value);
+      if (isNaN(rho)) throw new Error('Enter a valid resistivity value.');
+      if (rho <= 0) throw new Error('Resistivity must be a positive number.');
+    } else {
+      mn2 = parseFloat(el('f-mn2').value);
+      r = parseFloat(el('f-r').value);
+      if (isNaN(mn2) || isNaN(r)) throw new Error('Enter valid numeric values.');
+      if (ab2 <= mn2) throw new Error("Geometry violation: AB/2 must be greater than MN/2.");
+      k = calcKSchlumberger(ab2, mn2);
+      rho = r * k * info.mult;
+    }
+
+    if (state.data.length > 0){
+      const lastAb2 = state.data[state.data.length - 1].ab2;
+      if (ab2 < lastAb2){
+        throw new Error(`Out-of-sequence spacing: the last logged reading was AB/2=${lastAb2}m, and this one is AB/2=${ab2}m. Sounding readings must be logged in non-decreasing AB/2 order \u2014 check the field notebook and re-enter, or edit the previous point on the Data tab if it was a mistake. (Equal AB/2 is fine for an overlap/check reading at a different MN/2.)`);
+      }
+    }
+    state.data.push({array: state.arrayType, ab2, mn2, r, k, rho});
+    state.logFormValues = { 'f-ab2': '', 'f-mn2': '', 'f-r': '', 'f-rho': '' };
+    render();
+  } catch(e){
+    logError = e.message;
+    render();
+  }
+}
+
+/* =========================================================================
+   VIEW: DATA TABLE
+   ========================================================================= */
+function viewData(){
+  let restoredBanner = '';
+  if (state.justRestored){
+    restoredBanner = `<div class="alert ok">${ICONS.bolt}<div>Restored ${state.justRestored} reading${state.justRestored===1?'':'s'} from your last session, recovered automatically after an interruption. <span style="text-decoration:underline; cursor:pointer;" onclick="state.justRestored=0; render();">Dismiss</span></div></div>`;
+  }
+  if (!state.data.length){
+    return `${restoredBanner}<div class="empty">${ICONS.data}<div class="t">No readings logged yet</div><div>Head to the Log tab to add your first point.</div></div>`;
+  }
+  const rows = state.data.map((row,i) => {
+    const isDirect = row.mn2 === null;
+    const spacingLabel = isDirect ? `AB/2=${row.ab2}m` : `AB/2=${row.ab2}m, MN/2=${row.mn2}m`;
+    const extra = isDirect ? 'direct \u03C1\u2090 entry' : `R=${row.r}\u03A9 &middot; K=${row.k.toFixed(1)}`;
+    return `
+      <div class="row-item">
+        <div>
+          <div class="rho">${row.rho.toFixed(1)} <small>\u03A9\u00B7m</small></div>
+          <div class="meta">${ARRAY_INFO[row.array].code} &middot; ${spacingLabel} &middot; ${extra}</div>
+        </div>
+        <div class="row-actions">
+          <div class="icon-btn" onclick="openEditModal(${i})">${ICONS.edit}</div>
+          <div class="icon-btn" onclick="deleteRow(${i})">${ICONS.trash}</div>
+        </div>
+      </div>`;
+  }).join('');
+  return `${restoredBanner}<div class="section-title">Logged readings</div><div class="section-sub">${state.data.length} point(s) &mdash; tap to edit or delete.</div>${rows}`;
+}
+
+function deleteRow(i){
+  state.data.splice(i,1);
+  if (state.lastModel) state.lastModel = null;
+  render();
+}
+
+function openEditModal(i){
+  const row = state.data[i];
+  const isDirect = row.mn2 === null;
+  const html = `
+    <div class="close-row"><h3>Edit reading (${row.array})</h3><div class="icon-btn" onclick="closeModal()">${ICONS.close}</div></div>
+    <div id="edit-error"></div>
+    <label>Current spacing AB/2 (m)</label>
+    <input type="number" id="e-ab2" step="any" value="${row.ab2}">
+    ${isDirect ? `
+    <label>Apparent Resistivity (\u03A9\u00B7m)</label>
+    <input type="number" id="e-rho" step="any" value="${row.rho}">
+    ` : `
+    <label>Potential spacing MN/2 (m)</label>
+    <input type="number" id="e-mn2" step="any" value="${row.mn2}">
+    <label>Resistance R (\u03A9)</label>
+    <input type="number" id="e-r" step="any" value="${row.r}">
+    `}
+    <div class="btn-row">
+      <button class="btn ghost block" onclick="closeModal()">Cancel</button>
+      <button class="btn primary block" onclick="saveEditedRow(${i})">Save changes</button>
+    </div>
+  `;
+  showModal(html);
+}
+function saveEditedRow(i){
+  const row = state.data[i];
+  const isDirect = row.mn2 === null;
+  const errBox = el('edit-error');
+  try {
+    const ab2 = parseFloat(el('e-ab2').value);
+    if (isNaN(ab2)) throw new Error('Enter a valid AB/2 value.');
+    if (isDirect){
+      const rho = parseFloat(el('e-rho').value);
+      if (isNaN(rho)) throw new Error('Enter a valid resistivity value.');
+      if (rho <= 0) throw new Error('Resistivity must be a positive number.');
+      state.data[i] = {array: row.array, ab2, mn2: null, r: null, k: null, rho};
+    } else {
+      const mn2 = parseFloat(el('e-mn2').value);
+      const r = parseFloat(el('e-r').value);
+      if (isNaN(mn2) || isNaN(r)) throw new Error('Enter valid numeric values.');
+      if (ab2 <= mn2) throw new Error("AB/2 must be greater than MN/2.");
+      const k = calcKSchlumberger(ab2, mn2);
+      const mult = ARRAY_INFO[row.array].mult;
+      state.data[i] = {array: row.array, ab2, mn2, r, k, rho: r*k*mult};
+    }
+    closeModal();
+    state.lastModel = null;
+    render();
+  } catch(e){
+    errBox.innerHTML = `<div class="alert err">${ICONS.close}<div>${e.message}</div></div>`;
+  }
+}
+function showModal(html){ el('modal').innerHTML = html; el('modal-backdrop').classList.add('show'); }
+function closeModal(){ el('modal-backdrop').classList.remove('show'); }
+
+/* =========================================================================
+   VIEW: ANALYZE (curve / invert / design)
+   ========================================================================= */
+function viewAnalyze(){
+  const tabs = [['curve','Curve'],['invert','1D Invert'],['design','Design Model']];
+  return `
+    <div class="seg">${tabs.map(([k,l])=>`<button class="${state.analyzeTab===k?'active':''}" onclick="setAnalyzeTab('${k}')">${l}</button>`).join('')}</div>
+    <div id="analyze-body">${
+      state.analyzeTab === 'curve' ? viewCurve() :
+      state.analyzeTab === 'invert' ? viewInvert() : viewDesign()
+    }</div>
+  `;
+}
+function setAnalyzeTab(t){ state.analyzeTab = t; render(); }
+
+function viewCurve(){
+  if (!state.data.length) return `<div class="empty">${ICONS.analyze}<div class="t">No sounding curve yet</div><div>Log some readings first.</div></div>`;
+  const series = [{points: state.data.map(r=>[r.ab2,r.rho]), color:'#b5730e', style:'scatter'}];
+  return `
+    <div class="section-title">Sounding curve</div>
+    <div class="section-sub">Apparent resistivity vs. spacing, log-log.</div>
+    <div class="chart-frame" id="curve-chart">
+      <div class="chart-dl" onclick="downloadChartFrame('curve-chart', 'VES_Curve_${stationSlug()}.png')">${ICONS.download}</div>
+      ${buildLogLogChart(series)}
+    </div>
+    <div class="legend">
+      <span class="sw"><span class="dot" style="background:#b5730e"></span>Field data</span>
+    </div>
+  `;
+}
+
+// Flags a sustained deceleration or reversal in the observed curve's rate of
+// climb toward basement -- a pattern experienced VES practitioners associate
+// with a fracture or partial weathering zone within otherwise more resistive
+// basement, which a smooth layered fit can average over without surfacing.
+// This looks at the RAW OBSERVED data only, never the fitted model, since
+// the point is to flag something the field curve itself is showing.
+//
+// Scans the WHOLE limb rather than just the last interval: it finds the
+// steepest established rise anywhere in the curve, then scans forward from
+// there for the first interval that falls well below that rate (or reverses
+// outright) -- that is the true onset, which can sit well before the final
+// spacing. The flagged zone is only reported if the suppression PERSISTS to
+// the last reading; a dip that recovers into a strong climb afterward is
+// ordinary curve wobble, not a disrupted basement limb, and isn't flagged.
+function detectTailDeceleration(observed){
+  const grouped = {};
+  observed.forEach(([ab2, rho]) => {
+    if (!grouped[ab2]) grouped[ab2] = [];
+    grouped[ab2].push(rho);
+  });
+  const points = Object.keys(grouped).map(Number).sort((a,b)=>a-b)
+    .map(ab2 => [ab2, grouped[ab2].reduce((a,b)=>a+b,0)/grouped[ab2].length]);
+
+  if (points.length < 5) return null;
+
+  const slopes = [];
+  for (let i = 1; i < points.length; i++){
+    const [a0,r0] = points[i-1], [a1,r1] = points[i];
+    slopes.push((Math.log10(r1)-Math.log10(r0)) / (Math.log10(a1)-Math.log10(a0)));
+  }
+
+  const peakSlope = Math.max(...slopes);
+  if (peakSlope <= 0) return null;
+  const peakIdx = slopes.indexOf(peakSlope);
+
+  const ONSET_RATIO = 0.35;   // how suppressed a slope must be to start the flagged zone
+  const PERSIST_RATIO = 0.5;  // how suppressed every slope after onset must stay
+
+  let onsetIdx = -1;
+  for (let i = peakIdx + 1; i < slopes.length; i++){
+    if (slopes[i] < ONSET_RATIO * peakSlope){ onsetIdx = i; break; }
+  }
+  if (onsetIdx === -1) return null;
+
+  for (let i = onsetIdx; i < slopes.length; i++){
+    if (slopes[i] >= PERSIST_RATIO * peakSlope) return null;
+  }
+
+  return { onsetAb2: points[onsetIdx][0], lastAb2: points[points.length-1][0] };
+}
+function tailDecelerationNoteHtml(model){
+  if (!model.observed || model.observed.length < 5) return '';
+  const decel = detectTailDeceleration(model.observed);
+  if (!decel) return '';
+  const span = decel.onsetAb2 === decel.lastAb2 ? `AB/2=${decel.lastAb2}m` : `AB/2=${decel.onsetAb2}m through your widest spacing (${decel.lastAb2}m)`;
+  return `<div class="alert info">${ICONS.bolt}<div>Your field curve's rate of rise flattens or reverses across ${span}. That pattern can indicate a fracture or partial weathering zone within otherwise more resistive basement, rather than confirming solid, unfractured rock \u2014 a high inverted basement resistivity alone doesn't rule this out, since a smooth layered fit can average over it. Worth weighing before deciding against further investigation on this basis alone.</div></div>`;
+}
+
+function viewInvert(){
+  if (state.data.length < 4){
+    return `<div class="alert err">${ICONS.close}<div>Need at least 4 logged readings to invert a reliable model (have ${state.data.length}).</div></div>`;
+  }
+  const maxLayers = Math.min(6, Math.floor(state.data.length/2) + 1);
+  if (state.invertLayers > maxLayers) state.invertLayers = maxLayers;
+  if (state.invertLayers < 2) state.invertLayers = 2;
+  if (!state.invertMethod) state.invertMethod = 'bestfit';
+
+  let resultHtml = '';
+  if (state.lastModel && state.lastModel.source === 'invert'){
+    const m = state.lastModel;
+    const fitClass = m.rmsPercent < 5 ? 'ok' : m.rmsPercent < 12 ? 'info' : 'err';
+    const fitWord = m.rmsPercent < 5 ? 'Excellent fit' : m.rmsPercent < 12 ? 'Reasonable fit' : 'High misfit \u2014 try a different layer count';
+    const isSmoothed = m.method === 'smoothed';
+    resultHtml = `
+      <div class="divider"></div>
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>${isSmoothed ? 'Smoothed model (Occam-style)' : 'Best-fit model'}</span>
+        <div class="icon-btn" onclick="downloadModelImage(state.lastModel)">${ICONS.download}</div>
+      </div>
+      ${isSmoothed ? `<div class="alert info">${ICONS.bolt}<div>This trades some raw fit quality for a smoother layer sequence \u2014 it is not automatically more correct. Compare it against the Best fit result and use local geological knowledge (a nearby borehole, known stratigraphy) to judge which is more plausible here.</div></div>` : ''}
+      ${tailDecelerationNoteHtml(m)}
+      ${renderLayerStick(m)}
+      <div class="stat-grid">
+        <div class="stat"><div class="n">${m.rmsPercent.toFixed(1)}%</div><div class="l">RMS misfit</div></div>
+        <div class="stat"><div class="n">${m.nLayers}</div><div class="l">Layers</div></div>
+      </div>
+      <div class="alert ${fitClass}">${ICONS.bolt}<div>${fitWord}</div></div>
+      <div class="chart-frame" id="invert-chart">
+        <div class="chart-dl" onclick="downloadChartFrame('invert-chart', 'VES_ModelFit_${stationSlug()}.png')">${ICONS.download}</div>
+        ${buildLogLogChart([
+          {points:m.observed, color:'#b5730e', style:'scatter'},
+          {points:m.predicted, color:'#1f6259', style:'line', dashed:true},
+          {points:buildLayerStaircase(m, m.observed.map(p=>p[0])), color:'#a63a2c', style:'line', dashArray:'7,3', strokeWidth:1.4},
+        ])}
+      </div>
+      <div class="legend">
+        <span class="sw"><span class="dot" style="background:#b5730e"></span>Field data</span>
+        <span class="sw"><span class="ln"></span>Model curve</span>
+        <span class="sw"><span class="ln" style="border-top-color:#a63a2c"></span>Layer model</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="section-title">Auto-invert layers</div>
+    <!-- <div class="section-sub">Fits layer resistivity + thickness to your ${state.data.length} logged reading(s) using a Ghosh/YM6 forward model and a bounded Levenberg-Marquardt least-squares solver.</div> -->
+    <label>Number of layers</label>
+    <div class="seg">
+      ${Array.from({length: maxLayers-1}, (_,i)=>i+2).map(n =>
+        `<button class="${state.invertLayers===n?'active':''}" onclick="state.invertLayers=${n}; render();">${n}</button>`
+      ).join('')}
+    </div>
+    <label>Fit method</label>
+    <div class="seg">
+      <button class="${state.invertMethod==='bestfit'?'active':''}" onclick="state.invertMethod='bestfit'; render();">Best fit</button>
+      <button class="${state.invertMethod==='smoothed'?'active':''}" onclick="state.invertMethod='smoothed'; render();">Smoothed (Occam)</button>
+    </div>
+    <div class="section-sub" style="margin-top:-8px;">${state.invertMethod==='smoothed'
+      ? "Finds the smoothest layer sequence that still fits nearly as well as the best possible fit. Can be closer to the true structure when the raw data has noise-driven wiggles \u2014 but not always; it's a second lens, not a replacement for Best fit."
+      : "The single model that fits your logged readings most closely. Can occasionally chase small non-geological wiggles in the data into an unrealistically thin layer \u2014 try Smoothed (Occam) alongside it if a result here looks physically implausible."}</div>
+    <button class="btn primary block" id="invert-btn" onclick="runInversion()">Run inversion</button>
+    ${resultHtml}
+  `;
+}
+function runInversion(){
+  const btn = el('invert-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Running inversion\u2026`;
+  setTimeout(() => {
+    const method = state.invertMethod || 'bestfit';
+    const model = method === 'smoothed'
+      ? invert1DModelSmoothed(state.data, state.invertLayers)
+      : invert1DModel(state.data, state.invertLayers);
+    model.source = 'invert';
+    model.method = method;
+    state.lastModel = model;
+    render();
+  }, 40);
+}
+
+function viewDesign(){
+  const rowsHtml = state.designLayers.map((l,i) => {
+    const isLast = i === state.designLayers.length - 1;
+    return `
+      <div class="layer-form-row">
+        <div class="li-num">${i+1}</div>
+        <input type="number" step="any" placeholder="\u03A9\u00B7m" value="${l.rho}" oninput="state.designLayers[${i}].rho=parseFloat(this.value)||0; resetDesignIteration();">
+        ${isLast ? `<div style="font-size:11px; color:var(--text-dimmer); display:flex; align-items:center;">\u221E</div>`
+                 : `<input type="number" step="any" placeholder="thickness (m)" value="${l.h}" oninput="state.designLayers[${i}].h=parseFloat(this.value)||0; resetDesignIteration();">`}
+      </div>`;
+  }).join('');
+  const hasData = state.data.length > 0;
+  const n = state.designLayers.length;
+  const minNeeded = Math.max(4, 2*n - 1);
+  const canRefine = state.data.length >= minNeeded;
+
+  let resultHtml = '';
+  if (state.lastModel && state.lastModel.source === 'design'){
+    const m = state.lastModel;
+    const isIteration = m.method === 'iterate';
+    let fitHtml = '';
+    if (m.refined){
+      const fitClass = m.rmsPercent < 5 ? 'ok' : m.rmsPercent < 12 ? 'info' : 'err';
+      const fitWord = m.rmsPercent < 5 ? 'Excellent fit' : m.rmsPercent < 12 ? 'Reasonable fit' : (isIteration ? 'Still a high misfit \u2014 keep iterating, or try different starting values' : 'High misfit \u2014 try different starting values or more layers');
+      fitHtml = `
+        <div class="stat-grid">
+          <div class="stat"><div class="n">${m.rmsPercent.toFixed(1)}%</div><div class="l">RMS misfit</div></div>
+          <div class="stat"><div class="n">${m.nLayers}</div><div class="l">Layers</div></div>
+        </div>
+        ${m.method === 'smoothed' ? `<div class="alert info">${ICONS.bolt}<div>Smoothed (Occam) result \u2014 trades some raw fit quality for a smoother layer sequence. Compare it against the Best fit refinement and use local geological knowledge to judge which is more plausible here.</div></div>` : ''}
+        <div class="alert ${fitClass}">${ICONS.bolt}<div>${fitWord} \u2014 your inputs above have been updated ${isIteration ? 'after this iteration step' : 'to the refined values'}.</div></div>
+      `;
+    }
+    resultHtml = `
+      <div class="divider"></div>
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>${isIteration ? `Iteration ${state.designIterationCount} result` : (m.refined ? (m.method === 'smoothed' ? 'Refined model (Smoothed)' : 'Refined model (Best fit)') : 'Model preview')}</span>
+        <div class="icon-btn" onclick="downloadModelImage(state.lastModel)">${ICONS.download}</div>
+      </div>
+      ${isIteration ? `<div class="section-sub" style="margin-top:-8px; margin-bottom:10px;">One step at a time \u2014 not necessarily converged yet. Click "Iterate toward field data" again to keep going, or "Refine to fit field data" below to jump straight to a finished result.</div>` : ''}
+      ${fitHtml}
+      ${tailDecelerationNoteHtml(m)}
+      ${renderLayerStick(m)}
+      <div class="chart-frame" id="design-chart" style="margin-top:12px;">
+        <div class="chart-dl" onclick="downloadChartFrame('design-chart', 'VES_DesignCurve_${stationSlug()}.png')">${ICONS.download}</div>
+        ${buildLogLogChart([
+          ...(hasData ? [{points: state.data.map(r=>[r.ab2,r.rho]), color:'#b5730e', style:'scatter'}] : []),
+          {points:m.predicted, color:'#1f6259', style:'line', dashed:true},
+          {points:buildLayerStaircase(m, m.predicted.map(p=>p[0])), color:'#a63a2c', style:'line', dashArray:'7,3', strokeWidth:1.4},
+        ])}
+      </div>
+      <div class="legend">
+        ${hasData ? `<span class="sw"><span class="dot" style="background:#b5730e"></span>Field data</span>` : ''}
+        <span class="sw"><span class="ln"></span>${m.refined ? 'Refined curve' : 'Theoretical curve'}</span>
+        <span class="sw"><span class="ln" style="border-top-color:#a63a2c"></span>Layer model</span>
+      </div>
+    `;
+  }
+  if (!state.refineMethod) state.refineMethod = 'bestfit';
+  return `
+    <div class="section-title">Design a model</div>
+    <div class="section-sub">Manually set layer resistivity and thickness, preview the theoretical Schlumberger curve it produces, or refine these values against your logged field data. Uses the same Schlumberger kernel and Levenberg-Marquardt solver as auto-invert.</div>
+    <div class="card">
+      <div class="layer-form-row" style="margin-bottom:12px;"><div></div><div style="font-size:10.5px; color:var(--text-dimmer)">resistivity</div><div style="font-size:10.5px; color:var(--text-dimmer)">thickness</div></div>
+      ${rowsHtml}
+      <div class="btn-row">
+        <button class="btn ghost" onclick="addDesignLayer()">+ Layer</button>
+        ${state.designLayers.length > 2 ? `<button class="btn ghost" onclick="removeDesignLayer()">\u2212 Layer</button>` : ''}
+      </div>
+    </div>
+    <button class="btn primary block" onclick="previewDesignModel()">Preview curve</button>
+    <div style="height:10px"></div>
+    ${!hasData ? `<div class="alert info">${ICONS.bolt}<div>Log field readings first to enable iteration or refinement against real data.</div></div>` : ''}
+    ${hasData && !canRefine ? `<div class="alert info">${ICONS.bolt}<div>Need at least ${minNeeded} logged readings to iterate or refine a ${n}-layer model (have ${state.data.length}).</div></div>` : ''}
+    <button class="btn block" id="iterate-btn" onclick="iterateDesignModel()" ${canRefine ? '' : 'disabled'}>Iterate toward field data</button>
+    <div class="section-sub" style="margin-top:6px;">Nudges your current values a few steps closer to the field curve each click \u2014 the same solver as Refine, but one small, watchable step at a time, so you can stop as soon as you're satisfied rather than jumping straight to a final answer.</div>
+    ${state.designIterationCount > 0 ? `
+      <div class="alert info" style="margin-top:8px;">${ICONS.bolt}<div>Iteration ${state.designIterationCount} \u00B7 RMS ${state.lastModel && state.lastModel.source==='design' ? state.lastModel.rmsPercent.toFixed(1) : '?'}% \u2014 <span style="text-decoration:underline; cursor:pointer;" onclick="resetToOriginalDesign()">Reset to my original values</span></div></div>
+    ` : ''}
+    <div style="height:10px"></div>
+    ${canRefine ? `
+      <label>Refine method</label>
+      <div class="seg">
+        <button class="${state.refineMethod==='bestfit'?'active':''}" onclick="state.refineMethod='bestfit'; render();">Best fit</button>
+        <button class="${state.refineMethod==='smoothed'?'active':''}" onclick="state.refineMethod='smoothed'; render();">Smoothed (Occam)</button>
+      </div>
+    ` : ''}
+    <button class="btn block" id="refine-btn" onclick="refineDesignModel()" ${canRefine ? '' : 'disabled'}>Refine to fit field data</button>
+    ${resultHtml}
+  `;
+}
+function addDesignLayer(){
+  const last = state.designLayers[state.designLayers.length-1];
+  last.h = 10;
+  state.designLayers.push({rho:100, h:null});
+  resetDesignIteration();
+  render();
+}
+function removeDesignLayer(){
+  state.designLayers.pop();
+  state.designLayers[state.designLayers.length-1].h = null;
+  resetDesignIteration();
+  render();
+}
+function resetDesignIteration(){
+  state.designIterationCount = 0;
+  state.designIterationSnapshot = null;
+}
+function resetToOriginalDesign(){
+  if (state.designIterationSnapshot){
+    state.designLayers = state.designIterationSnapshot.map(l => ({...l}));
+  }
+  resetDesignIteration();
+  render();
+}
+function previewDesignModel(){
+  resetDesignIteration();
+  const n = state.designLayers.length;
+  const res = state.designLayers.map(l=>Math.max(l.rho,0.01));
+  const thk = state.designLayers.slice(0,-1).map(l=>Math.max(l.h,0.01));
+  const ab2Values = state.data.length ? [...new Set(state.data.map(r=>r.ab2))].sort((a,b)=>a-b)
+                                 : [1,1.5,2,3,5,7,10,15,20,30,50,70,100];
+  const predicted = forwardModelSchlumberger(res, thk, ab2Values);
+  const depths = []; let running=0;
+  thk.forEach(t=>{running+=t; depths.push(running);});
+  state.lastModel = {
+    source:'design', refined:false, nLayers:n, resistivities:res, thicknesses:thk, depths, rmsPercent:0,
+    observed: state.data.map(r=>[r.ab2,r.rho]),
+    predicted: ab2Values.map((x,i)=>[x,predicted[i]]),
+  };
+  render();
+}
+function refineDesignModel(){
+  const btn = el('refine-btn');
+  if (btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Refining\u2026`; }
+  setTimeout(() => {
+    const n = state.designLayers.length;
+    const sorted = state.data.slice().sort((a,b)=>a.ab2-b.ab2);
+    const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+
+    const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
+    const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
+    const resLoLog = Math.log10(minObsRho) - Math.log10(50);
+    const resHiLog = Math.log10(maxObsRho) + Math.log10(200);
+    const deepResHiLog = Math.min(resHiLog, Math.log10(state.resCeiling));
+    const resHiLogFor = (i) => (i === n - 1) ? deepResHiLog : resHiLog;
+    const thkFloor = Math.max(0.05 * minAb2, 0.15);
+    const thkCeil = Math.max(maxAb2, thkFloor * 10); // depth-of-investigation cap: a VES sounding cannot reliably resolve depths beyond roughly its max AB/2
+    const thkLoLog = Math.log10(thkFloor), thkHiLog = Math.log10(thkCeil);
+
+    function decode(params){
+      const res = params.slice(0,n).map((p,i) => boundedFromParam(p, resLoLog, resHiLogFor(i)));
+      const thk = params.slice(n).map(p => boundedFromParam(p, thkLoLog, thkHiLog));
+      return [res, thk];
+    }
+    function residuals(params){
+      const [res, thk] = decode(params);
+      let predicted;
+      try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+      catch(e){ return ab2List.map(()=>1e3); }
+      return rhoList.map((obs,i) => {
+        const pred = predicted[i];
+        if (!(pred > 0) || !isFinite(pred)) return 1e3;
+        return Math.log10(obs) - Math.log10(pred);
+      });
+    }
+
+    // Seed directly from the values currently in the form -- this is a
+    // *local* refinement of your own starting point (not the broad
+    // multi-seed search auto-invert runs), so a few small jittered
+    // restarts around your input, not a wide structural search.
+    const userRes = state.designLayers.map(l => Math.max(l.rho, 0.01));
+    const userThk = state.designLayers.slice(0,-1).map(l => Math.max(l.h, 0.01));
+    const baseX0 = userRes.map((r,i) => paramFromBounded(r, resLoLog, resHiLogFor(i)))
+      .concat(userThk.map(t => paramFromBounded(t, thkLoLog, thkHiLog)));
+
+    let best = null;
+    for (let attempt = 0; attempt < 6; attempt++){
+      const x0 = attempt === 0 ? baseX0 : baseX0.map(v => v + (Math.random()*0.8 - 0.4));
+      const cand = levenbergMarquardt(residuals, x0, {maxIter: 100});
+      if (!best || cand.cost < best.cost) best = cand;
+    }
+
+    const method = state.refineMethod || 'bestfit';
+    const finalX = method === 'smoothed'
+      ? adaptiveSmoothFromBaseline(residuals, decode, best.x, best.cost, 1.3)
+      : best.x;
+
+    const [finalRes, finalThk] = decode(finalX);
+    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+    const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
+    const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
+    const depths = []; let running = 0;
+    finalThk.forEach(t=>{ running += t; depths.push(running); });
+
+    // Reflect the refined values back into the editable form so the user
+    // can inspect them, keep tweaking, and refine again if they want.
+    state.designLayers = finalRes.map((r,i) => ({
+      rho: Math.round(r*100)/100,
+      h: i < finalThk.length ? Math.round(finalThk[i]*100)/100 : null,
+    }));
+
+    state.lastModel = {
+      source: 'design', refined: true, method, nLayers: n,
+      resistivities: finalRes, thicknesses: finalThk, depths, rmsPercent,
+        observed: sorted.map(p=>[p.ab2,p.rho]),
+      predicted: ab2List.map((x,i)=>[x, predicted[i]]),
+    };
+    render();
+  }, 40);
+}
+
+// Runs just a few Levenberg-Marquardt steps from the CURRENT design values
+// (not a full multi-restart search to convergence, and not the Occam
+// smoothing option -- this is meant to be the plain, transparent, watchable
+// middle ground between a pure theoretical preview and a one-click final
+// answer). Repeated clicks feed the previous result back in as the next
+// starting point, so the model visibly walks toward the field curve one
+// small step at a time, and the user can stop as soon as they're satisfied.
+const DESIGN_ITERATION_STEPS = 3;
+function iterateDesignModel(){
+  const btn = el('iterate-btn');
+  if (btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Iterating\u2026`; }
+  setTimeout(() => {
+    const n = state.designLayers.length;
+    const sorted = state.data.slice().sort((a,b)=>a.ab2-b.ab2);
+    const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+
+    const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
+    const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
+    const resLoLog = Math.log10(minObsRho) - Math.log10(50);
+    const resHiLog = Math.log10(maxObsRho) + Math.log10(200);
+    const deepResHiLog = Math.min(resHiLog, Math.log10(state.resCeiling));
+    const resHiLogFor = (i) => (i === n - 1) ? deepResHiLog : resHiLog;
+    const thkFloor = Math.max(0.05 * minAb2, 0.15);
+    const thkCeil = Math.max(maxAb2, thkFloor * 10);
+    const thkLoLog = Math.log10(thkFloor), thkHiLog = Math.log10(thkCeil);
+
+    function decode(params){
+      const res = params.slice(0,n).map((p,i) => boundedFromParam(p, resLoLog, resHiLogFor(i)));
+      const thk = params.slice(n).map(p => boundedFromParam(p, thkLoLog, thkHiLog));
+      return [res, thk];
+    }
+    function residuals(params){
+      const [res, thk] = decode(params);
+      let predicted;
+      try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+      catch(e){ return ab2List.map(()=>1e3); }
+      return rhoList.map((obs,i) => {
+        const pred = predicted[i];
+        if (!(pred > 0) || !isFinite(pred)) return 1e3;
+        return Math.log10(obs) - Math.log10(pred);
+      });
+    }
+
+    // Snapshot the pre-iteration values once, the first time a sequence
+    // starts, so "Reset to my original values" has something to return to.
+    if (state.designIterationCount === 0){
+      state.designIterationSnapshot = state.designLayers.map(l => ({...l}));
+    }
+
+    const curRes = state.designLayers.map(l => Math.max(l.rho, 0.01));
+    const curThk = state.designLayers.slice(0,-1).map(l => Math.max(l.h, 0.01));
+    const x0 = curRes.map((r,i) => paramFromBounded(r, resLoLog, resHiLogFor(i)))
+      .concat(curThk.map(t => paramFromBounded(t, thkLoLog, thkHiLog)));
+
+    const stepped = levenbergMarquardt(residuals, x0, {maxIter: DESIGN_ITERATION_STEPS});
+    const [finalRes, finalThk] = decode(stepped.x);
+    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+    const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
+    const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
+    const depths = []; let running = 0;
+    finalThk.forEach(t=>{ running += t; depths.push(running); });
+
+    state.designLayers = finalRes.map((r,i) => ({
+      rho: Math.round(r*100)/100,
+      h: i < finalThk.length ? Math.round(finalThk[i]*100)/100 : null,
+    }));
+    state.designIterationCount++;
+
+    state.lastModel = {
+      source: 'design', refined: true, method: 'iterate', nLayers: n,
+      resistivities: finalRes, thicknesses: finalThk, depths, rmsPercent,
+      observed: sorted.map(p=>[p.ab2,p.rho]),
+      predicted: ab2List.map((x,i)=>[x, predicted[i]]),
+    };
+    render();
+  }, 40);
+}
+
+/* =========================================================================
+   VIEW: EXPORT
+   ========================================================================= */
+function viewExport(){
+  return `
+    <div class="section-title">Export</div>
+    <div class="section-sub">Save this station's data to your device. Curve and model images can also be downloaded directly from the Analyze tab.</div>
+    <div class="card">
+      <div style="font-family:var(--font-d); font-weight:600; margin-bottom:2px;">${state.metadata.station || 'Untitled station'}</div>
+      <div style="font-size:11.5px; color:var(--text-dimmer);">${state.data.length} reading(s)${state.lastModel ? ` &middot; ${state.lastModel.nLayers}-layer model on file` : ''}</div>
+    </div>
+    <button class="btn primary block" onclick="downloadCSV()" ${state.data.length?'':'disabled'}>Download CSV data</button>
+    <div style="height:10px"></div>
+    <button class="btn block" onclick="downloadHTMLReport()" ${state.data.length?'':'disabled'}>Download HTML report</button>
+    <div class="divider"></div>
+    <button class="btn danger block" onclick="confirmReset()">Clear session &amp; start new station</button>
+  `;
+}
+function downloadLocationMap(){
+  const coords = parseGpsString(state.metadata.gps);
+  if (!coords) return;
+  const m = state.metadata;
+  const { lat, lng } = coords;
+  const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  // OpenStreetMap's embed needs no API key, unlike Google Maps tiles, which
+  // this app has no key for -- the Google Maps link above is the real,
+  // no-key way to hand someone this location in Google Maps itself.
+  const d = 0.006;
+  const bbox = `${lng-d},${lat-d},${lng+d},${lat+d}`;
+  const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VES Station Location - ${m.station||''}</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; margin:0; padding:20px; color:#332f28; background:#faf8f3; line-height:1.4;}
+    .card{background:#ffffff; border:1px solid rgba(120,72,22,0.18); border-radius:8px; padding:18px; max-width:600px; margin:0 auto;}
+    h1{font-size:18px; margin:0 0 4px;}
+    .sub{font-size:12.5px; color:#76695c; margin-bottom:16px;}
+    .coords{font-family:ui-monospace,monospace; font-size:15px; background:#f3efe4; padding:10px 12px; border-radius:5px; margin-bottom:14px;}
+    iframe{width:100%; height:320px; border:1px solid rgba(120,72,22,0.3); border-radius:6px; margin-bottom:14px;}
+    a.btn{display:block; text-align:center; background:#b5730e; color:#fff8ea; text-decoration:none; font-weight:600; padding:13px; border-radius:6px;}
+    .preview-label{font-size:11px; color:#a89d89; margin-bottom:6px;}
+    .footer{margin-top:18px; font-size:10px; color:#9ca3af; font-style:italic; text-align:center;}
+  </style></head><body>
+  <div class="card">
+    <h1>${m.station || 'VES Station'}</h1>
+    <div class="sub">${m.project ? `${m.project} &middot; ` : ''}${m.geologist || ''}</div>
+    <div class="coords">Lat: ${lat}, Long: ${lng}</div>
+    <div class="preview-label">Map preview (OpenStreetMap):</div>
+    <iframe src="${osmEmbedUrl}" loading="lazy"></iframe>
+    <a class="btn" href="${gmapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>
+    <div class="footer">Generated by the VES Field Assistant v${APP_VERSION} &middot; Powered by Asije Labs &middot; ${APP_COPYRIGHT}.</div>
+  </div>
+  </body></html>`;
+  triggerDownload(`VES_Location_${(m.station||'station').replace(/\s+/g,'_')}.html`, html, 'text/html');
+}
+function triggerDownload(filename, content, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function downloadCSV(){
+  const m = state.metadata;
+  let csv = `# Project: ${m.project}\n# Station ID: ${m.station}\n# Geologist: ${m.geologist}\n# GPS Coordinates: ${m.gps}\n# Export Timestamp: ${new Date().toISOString()}\n# VES Field Assistant v${APP_VERSION} \u00B7 Powered by Asije Labs \u00B7 ${APP_COPYRIGHT}\n`;
+  csv += 'Array,AB2,MN2,Resistance,K_Factor,App_Resistivity\n';
+  state.data.forEach(r => { csv += `${r.array},${r.ab2},${r.mn2===null?'':r.mn2},${r.r===null?'':r.r},${r.k===null?'':r.k.toFixed(2)},${r.rho.toFixed(2)}\n`; });
+  if (state.lastModel){
+    const lm = state.lastModel;
+    csv += `\n# --- Interpreted 1D Earth Model${lm.source==='invert'?` (RMS Misfit: ${lm.rmsPercent.toFixed(2)}%)`:''} ---\n`;
+    csv += 'Layer,Resistivity_Ohm_m,Thickness_m,Depth_to_Base_m\n';
+    for (let i=0;i<lm.nLayers;i++){
+      const thickStr = i < lm.nLayers-1 ? lm.thicknesses[i].toFixed(2) : '\u221E';
+      const depthStr = i < lm.nLayers-1 ? lm.depths[i].toFixed(2) : '';
+      csv += `${i+1},${lm.resistivities[i].toFixed(2)},${thickStr},${depthStr}\n`;
+    }
+  }
+  triggerDownload(`VES_Data_${(m.station||'station').replace(/\s+/g,'_')}.csv`, csv, 'text/csv');
+}
+function downloadHTMLReport(){
+  const m = state.metadata;
+  let rowsHtml = state.data.map(r => `<tr><td>${r.array}</td><td>${r.ab2}</td><td>${r.mn2===null?'\u2014':r.mn2}</td><td>${r.r===null?'\u2014':r.r}</td><td>${r.k===null?'\u2014':r.k.toFixed(2)}</td><td>${r.rho.toFixed(2)}</td></tr>`).join('');
+  let modelHtml = '';
+  if (state.lastModel){
+    const lm = state.lastModel;
+    modelHtml = `<h2>Interpreted 1D Earth Model</h2>
+      ${lm.source==='invert' ? `<div class="model-box">RMS Misfit vs. Field Data: ${lm.rmsPercent.toFixed(2)}%</div>` : ''}
+      <table><thead><tr><th>Layer</th><th>Resistivity (&Omega;-m)</th><th>Thickness (m)</th><th>Depth to Base (m)</th></tr></thead><tbody>
+      ${Array.from({length: lm.nLayers}, (_,i) => {
+        const thickStr = i < lm.nLayers-1 ? lm.thicknesses[i].toFixed(2) : '\u221E';
+        const depthStr = i < lm.nLayers-1 ? lm.depths[i].toFixed(2) : '--';
+        return `<tr><td>${i+1}</td><td>${lm.resistivities[i].toFixed(2)}</td><td>${thickStr}</td><td>${depthStr}</td></tr>`;
+      }).join('')}
+      </tbody></table>`;
+  }
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VES Field Report - ${m.station}</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; margin:15px; color:#333; line-height:1.4;}
+    h2{color:#1e3a8a; border-bottom:2px solid #1e3a8a; padding-bottom:4px; font-size:14px; margin-top:20px;}
+    .metadata-box{background:#f3f4f6; padding:12px; border-radius:6px; margin-bottom:15px; font-size:12px;}
+    .metadata-item{font-weight:bold; color:#4b5563;}
+    table{border-collapse:collapse; margin-top:10px; font-size:10px;}
+    th{background:#1e40af; color:#fff; font-weight:bold; text-align:center; padding:4px; border:1px solid #94a3b8;}
+    td{padding:4px; text-align:center; border:1px solid #cbd5e1;}
+    tr:nth-child(even){background:#f8fafc;}
+    .model-box{background:#ecfdf5; border:1px solid #10b981; padding:10px; border-radius:6px; margin-top:10px; font-size:11px;}
+    .footer{margin-top:25px; font-size:10px; color:#9ca3af; font-style:italic; text-align:center;}
+  </style></head><body>
+  <h2>Groundwater Geophysics Report</h2>
+  <div class="metadata-box">
+    <div><span class="metadata-item">Project:</span> ${m.project}</div>
+    <div><span class="metadata-item">Station ID:</span> ${m.station}</div>
+    <div><span class="metadata-item">Geologist:</span> ${m.geologist}</div>
+    <div><span class="metadata-item">GPS:</span> ${m.gps}</div>
+    <div><span class="metadata-item">Export:</span> ${new Date().toLocaleString()}</div>
+  </div>
+  <h2>Tabulated Data</h2>
+  <table><thead><tr><th>Array</th><th>AB/2 (m)</th><th>MN/2 (m)</th><th>Resistance (&Omega;)</th><th>K Factor</th><th>App. Resistivity (&Omega;-m)</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+  ${modelHtml}
+  <div class="footer">Generated by the VES Field Assistant v${APP_VERSION} &middot; Powered by Asije Labs &middot; ${APP_COPYRIGHT}.</div>
+  </body></html>`;
+  triggerDownload(`VES_Report_${(m.station||'station').replace(/\s+/g,'_')}.html`, html, 'text/html');
+}
+function confirmReset(){
+  showModal(`
+    <div class="close-row"><h3>Start a new station?</h3><div class="icon-btn" onclick="closeModal()">${ICONS.close}</div></div>
+    <div class="section-sub">This clears all logged readings and the current model. Export first if you need to keep them.</div>
+    <div class="btn-row">
+      <button class="btn ghost block" onclick="closeModal()">Cancel</button>
+      <button class="btn danger block" onclick="doReset()">Clear session</button>
+    </div>
+  `);
+}
+function doReset(){
+  state.data = [];
+  state.lastModel = null;
+  state.metadata = { project:'', station:'', geologist:'', gps:'' };
+  state.justRestored = 0;
+  state.gpsError = null;
+  state.gpsNote = null;
+  clearSessionStorage();
+  closeModal();
+  state.tab = 'setup';
+  render();
+}
+
+const wasRestored = restoreSessionIfAvailable();
+if (wasRestored) state.tab = 'data';
+render();
+</script>
+</body>
+</html>
