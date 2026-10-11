@@ -13,7 +13,7 @@ A mobile-first, offline-capable tool for logging and interpreting **Vertical Ele
 
 Log a reading. Get a layered-earth model back. Export a report. All before you pull the electrodes.
 
-**[Open the live app](#)** *(add your GitHub Pages link here once hosted)*
+**[Open the live app](https://hydrolithnigltd.github.io/ves-field-assistant/)**
 
 ---
 

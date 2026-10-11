@@ -12,9 +12,11 @@
 // new name, and the old cache is deleted on activation. Until then, the
 // previously-cached version keeps working offline, which is the correct
 // behavior for a field tool -- never leave someone with nothing mid-survey.
-const CACHE_VERSION = 'ves-field-assistant-v1';
+const CACHE_VERSION = 'ves-field-assistant-v2';
 
 const APP_SHELL = [
+  './',
+  './index.html',
   './VES_Field_Assistant.html',
   './manifest.json',
   './icons/icon-192.png',

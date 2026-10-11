@@ -2,7 +2,7 @@
   "name": "VES Field Assistant",
   "short_name": "VES Assistant",
   "description": "Offline Vertical Electrical Sounding (VES) field logging and inversion tool.",
-  "start_url": "./VES_Field_Assistant.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
