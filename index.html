@@ -784,13 +784,14 @@ function niceLogBounds(vals){
   return [loE, hiE];
 }
 function fmtPow(v){
+  // Always a plain full number (e.g. 10000, never 1e4)
   const n = Number(v.toPrecision(3));
-  return n >= 1000 ? n.toExponential(0).replace('+','') : n.toString();
+  return n >= 1 ? String(Math.round(n)) : n.toFixed(Math.min(6, Math.max(1, -Math.floor(Math.log10(n))))).replace(/0+$/,'');
 }
 function buildLogLogChart(seriesList, opts){
   opts = opts || {};
-  const W = opts.width || 400, H = opts.height || 250;
-  const padL = 34, padR = 10, padT = 10, padB = 22;
+  const W = opts.width || 400, H = opts.height || 272;
+  const padL = 54, padR = 12, padT = 10, padB = 38;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   let allX = [], allY = [];
   seriesList.forEach(s => s.points.forEach(p => { allX.push(p[0]); allY.push(p[1]); }));
@@ -836,6 +837,8 @@ function buildLogLogChart(seriesList, opts){
 
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block; width:100%; height:auto;"><rect width="${W}" height="${H}" fill="#ffffff"/>${grid}${seriesSvg}
     <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(120,72,22,0.55)" stroke-width="1"/>
+    <text x="${(padL+plotW/2).toFixed(1)}" y="${H-5}" font-size="10" font-weight="700" fill="#332f28" text-anchor="middle" font-family="JetBrains Mono">${opts.xLabel || 'AB/2 (m)'}</text>
+    <text transform="translate(11,${(padT+plotH/2).toFixed(1)}) rotate(-90)" font-size="10" font-weight="700" fill="#332f28" text-anchor="middle" font-family="JetBrains Mono">${opts.yLabel || 'Apparent resistivity (\u03A9\u00B7m)'}</text>
   </svg>`;
 }
 
