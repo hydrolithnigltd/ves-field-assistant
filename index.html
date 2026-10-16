@@ -310,6 +310,7 @@ const state = {
   logMode: 'full',
   justRestored: 0,
   resCeiling: DEFAULT_RES_CEILING,
+  curveSmoothing: false,
   gpsFetching: false,
   gpsError: null,
   gpsNote: null,
@@ -562,6 +563,77 @@ function paramFromBounded(value, loLog, hiLog){
   return logit(t);
 }
 
+/* Resolvability constraint for AUTO-INVERT (best-fit and smoothed).
+   A surface sounding cannot resolve a layer that is thin relative to its own
+   depth OR relative to its shortest electrode spacing: such a layer's effect
+   on the curve is indistinguishable from its neighbours' (equivalence), so an
+   unconstrained fit freely collapses extra layers into sub-metre slivers that
+   fit noise rather than geology (the "4-layer collapse"). This adds a soft
+   hinge penalty to the residual vector. Every finite layer must be at least
+   MIN_LAYER_RATIO of its depth to top AND at least MIN_LAYER_AB2_FRACTION of
+   the shortest AB/2; the penalty is zero when satisfied and grows smoothly
+   as a layer gets thinner. Soft, not a hard bound, so a genuinely thin
+   layer the data insists on can still appear, just no longer for free. */
+const MIN_LAYER_RATIO = 0.5;
+const MIN_LAYER_AB2_FRACTION = 0.5;
+const RESOLVABILITY_WEIGHT = 5;
+function resolvabilityPenalty(thk, minAb2){
+  const out = [];
+  let depthToTop = 0;
+  for (let i = 0; i < thk.length; i++){
+    const required = Math.max(MIN_LAYER_AB2_FRACTION * minAb2, MIN_LAYER_RATIO * depthToTop);
+    out.push(RESOLVABILITY_WEIGHT * Math.max(0, Math.log10(required / thk[i])));
+    depthToTop += thk[i];
+  }
+  return out;
+}
+
+/* IPI2Win-style field-curve smoothing (optional, off by default).
+   Commercial packages such as IPI2Win and WinResist fit a smoothed copy of
+   the field curve (WinResist reports its RMS "on smoothed data"), not the raw
+   readings. Raw Schlumberger data carries small jumps where MN/2 is changed
+   at a repeated AB/2 plus ordinary noise, and an unsmoothed fit will chase
+   them. This does the same in two steps: (1) readings at the same AB/2 are
+   averaged (in log space) into one point; (2) the curve is smoothed in
+   log-log space with a 5-point tricube-weighted local quadratic regression,
+   evaluated at the original spacings. With fewer than 5 distinct spacings
+   only step 1 is applied. The fit's RMS is then measured against the
+   smoothed curve; the model object also carries the RMS against the raw
+   readings, so the smoothing cannot hide a poor raw fit. */
+const CURVE_SMOOTH_SPAN = 5;
+function smoothFieldCurve(points){
+  const g = new Map();
+  points.forEach(p => { if (!g.has(p.ab2)) g.set(p.ab2, []); g.get(p.ab2).push(Math.log10(p.rho)); });
+  const merged = Array.from(g.keys()).sort((a,b)=>a-b).map(ab => ({
+    ab2: ab, rho: Math.pow(10, g.get(ab).reduce((s,v)=>s+v,0) / g.get(ab).length)
+  }));
+  if (merged.length < CURVE_SMOOTH_SPAN) return merged;
+  const x = merged.map(p => Math.log10(p.ab2)), y = merged.map(p => Math.log10(p.rho));
+  const k = Math.min(CURVE_SMOOTH_SPAN, merged.length);
+  return merged.map((p,i) => {
+    const near = x.map((v,j) => [Math.abs(v - x[i]), j]).sort((a,b)=>a[0]-b[0]).slice(0,k);
+    const dmax = Math.max(near[near.length-1][0], 1e-9) * 1.0001;
+    const S = [[0,0,0],[0,0,0],[0,0,0]], T = [0,0,0];
+    for (const [d,j] of near){
+      const w = Math.pow(1 - Math.pow(d/dmax, 3), 3), dx = x[j] - x[i], b = [1, dx, dx*dx];
+      for (let a = 0; a < 3; a++){ for (let c = 0; c < 3; c++) S[a][c] += w*b[a]*b[c]; T[a] += w*b[a]*y[j]; }
+    }
+    const sol = solveLinear(S, T);
+    const v = (sol && isFinite(sol[0])) ? sol[0] : y[i];
+    return { ab2: p.ab2, rho: Math.pow(10, v) };
+  });
+}
+function attachRawFit(model, rawPoints){
+  const sorted = rawPoints.slice().sort((a,b)=>a.ab2-b.ab2);
+  const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+  const predicted = forwardModelSchlumberger(model.resistivities, model.thicknesses, ab2List);
+  const sq = rhoList.map((obs,i) => Math.pow((obs-predicted[i])/obs, 2));
+  model.curveSmoothed = true;
+  model.rawRmsPercent = Math.sqrt(sq.reduce((a,b)=>a+b,0)/sq.length) * 100;
+  model.observed = ab2List.map((x,i)=>[x, rhoList[i]]);
+  model.predicted = ab2List.map((x,i)=>[x, predicted[i]]);
+}
+
 function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.resCeiling){
   resCeiling = Math.min(resCeiling, MAX_RES_CEILING);
   const sorted = dataPoints.slice().sort((a,b)=>a.ab2-b.ab2);
@@ -589,14 +661,15 @@ function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.
   }
   function residuals(params){
     const [res, thk] = decode(params);
+    const pen = resolvabilityPenalty(thk, minAb2);
     let predicted;
     try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
-    catch(e){ return ab2List.map(()=>1e6); }
+    catch(e){ return ab2List.map(()=>1e6).concat(pen); }
     return rhoList.map((obs,i) => {
       const pred = predicted[i];
       if (!(pred > 0) || !isFinite(pred)) return 1e6;
       return Math.log10(obs) - Math.log10(pred);
-    });
+    }).concat(pen);
   }
 
   const seeds = buildSeeds(ab2List, rhoList, nLayers);
@@ -714,14 +787,15 @@ function invert1DModelSmoothed(dataPoints, nLayers, opts){
   }
   function dataResiduals(params){
     const [res, thk] = decode(params);
+    const pen = resolvabilityPenalty(thk, minAb2);
     let predicted;
     try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
-    catch(e){ return ab2List.map(()=>1e3); }
+    catch(e){ return ab2List.map(()=>1e3).concat(pen); }
     return rhoList.map((obs,i) => {
       const pred = predicted[i];
       if (!(pred > 0) || !isFinite(pred)) return 1e3;
       return Math.log10(obs) - Math.log10(pred);
-    });
+    }).concat(pen);
   }
 
   const seeds = buildSeeds(ab2List, rhoList, nLayers);
@@ -1027,7 +1101,7 @@ function buildModelSummarySvg(model){
     statsHtml = `
       <rect x="${pad}" y="${statY.toFixed(1)}" width="${statW.toFixed(1)}" height="${statH}" rx="5" fill="#f3efe4" stroke="#e7ded0" stroke-width="1"/>
       <text x="${(pad+14).toFixed(1)}" y="${(statY+25).toFixed(1)}" font-size="18" font-weight="700" fill="#332f28" font-family="Space Grotesk">${model.rmsPercent.toFixed(1)}%</text>
-      <text x="${(pad+14).toFixed(1)}" y="${(statY+41).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">RMS misfit</text>
+      <text x="${(pad+14).toFixed(1)}" y="${(statY+41).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">RMS misfit${model.curveSmoothed ? ' (smoothed curve)' : ''}</text>
       <rect x="${stat2X.toFixed(1)}" y="${statY.toFixed(1)}" width="${statW.toFixed(1)}" height="${statH}" rx="5" fill="#f3efe4" stroke="#e7ded0" stroke-width="1"/>
       <text x="${(stat2X+14).toFixed(1)}" y="${(statY+25).toFixed(1)}" font-size="18" font-weight="700" fill="#332f28" font-family="Space Grotesk">${model.nLayers}</text>
       <text x="${(stat2X+14).toFixed(1)}" y="${(statY+41).toFixed(1)}" font-size="10" fill="#a89d89" font-family="JetBrains Mono">Layers</text>`;
@@ -1037,7 +1111,7 @@ function buildModelSummarySvg(model){
   const H = afterStatsY + footerH - 14;
 
   const title = `Interpreted 1D Earth Model${state.metadata.station ? ' \u2014 ' + state.metadata.station : ''}`;
-  const subtitle = model.source === 'invert' ? `${model.nLayers} layers \u00B7 RMS misfit ${model.rmsPercent.toFixed(2)}%` : `${model.nLayers} layers \u00B7 designed model`;
+  const subtitle = model.source === 'invert' ? `${model.nLayers} layers \u00B7 RMS misfit ${model.rmsPercent.toFixed(2)}%${model.curveSmoothed ? ' (smoothed curve; raw ' + model.rawRmsPercent.toFixed(2) + '%)' : ''}` : `${model.nLayers} layers \u00B7 designed model`;
 
   // NOTE: this string is loaded into an <img> as image/svg+xml, which parses
   // as strict XML -- only the five predefined XML entities are valid there,
@@ -1491,9 +1565,10 @@ function viewInvert(){
       ${tailDecelerationNoteHtml(m)}
       ${renderLayerStick(m)}
       <div class="stat-grid">
-        <div class="stat"><div class="n">${m.rmsPercent.toFixed(1)}%</div><div class="l">RMS misfit</div></div>
+        <div class="stat"><div class="n">${m.rmsPercent.toFixed(1)}%</div><div class="l">RMS misfit${m.curveSmoothed ? ' (smoothed curve)' : ''}</div></div>
         <div class="stat"><div class="n">${m.nLayers}</div><div class="l">Layers</div></div>
       </div>
+      ${m.curveSmoothed ? `<div class="alert info">${ICONS.bolt}<div>Fitted to a smoothed copy of your curve. RMS against your raw logged readings: ${m.rawRmsPercent.toFixed(1)}%.</div></div>` : ''}
       <div class="alert ${fitClass}">${ICONS.bolt}<div>${fitWord}</div></div>
       <div class="chart-frame" id="invert-chart">
         <div class="chart-dl" onclick="downloadChartFrame('invert-chart', 'VES_ModelFit_${stationSlug()}.png')">${ICONS.download}</div>
@@ -1528,6 +1603,14 @@ function viewInvert(){
     <div class="section-sub" style="margin-top:-8px;">${state.invertMethod==='smoothed'
       ? "Finds the smoothest layer sequence that still fits nearly as well as the best possible fit. Can be closer to the true structure when the raw data has noise-driven wiggles \u2014 but not always; it's a second lens, not a replacement for Best fit."
       : "The single model that fits your logged readings most closely. Can occasionally chase small non-geological wiggles in the data into an unrealistically thin layer \u2014 try Smoothed (Occam) alongside it if a result here looks physically implausible."}</div>
+    <label>Field curve</label>
+    <div class="seg">
+      <button class="${!state.curveSmoothing?'active':''}" onclick="state.curveSmoothing=false; render();">As logged</button>
+      <button class="${state.curveSmoothing?'active':''}" onclick="state.curveSmoothing=true; render();">Smoothed (IPI2Win-style)</button>
+    </div>
+    <div class="section-sub" style="margin-top:-8px;">${state.curveSmoothing
+      ? "Fits a smoothed copy of your curve, as IPI2Win and WinResist do: readings at the same AB/2 are averaged, then the curve is smoothed in log-log space. This removes MN/2-change jumps and noise, so the RMS is comparable to theirs. The RMS against your raw readings is shown alongside."
+      : "Fits your readings exactly as logged, including any jumps where MN/2 was changed."}</div>
     <button class="btn primary block" id="invert-btn" onclick="runInversion()">Run inversion</button>
     ${resultHtml}
   `;
@@ -1538,9 +1621,11 @@ function runInversion(){
   btn.innerHTML = `<span class="spinner"></span> Running inversion\u2026`;
   setTimeout(() => {
     const method = state.invertMethod || 'bestfit';
+    const fitData = state.curveSmoothing ? smoothFieldCurve(state.data) : state.data;
     const model = method === 'smoothed'
-      ? invert1DModelSmoothed(state.data, state.invertLayers)
-      : invert1DModel(state.data, state.invertLayers);
+      ? invert1DModelSmoothed(fitData, state.invertLayers)
+      : invert1DModel(fitData, state.invertLayers);
+    if (state.curveSmoothing) attachRawFit(model, state.data);
     model.source = 'invert';
     model.method = method;
     state.lastModel = model;
@@ -1907,7 +1992,7 @@ function downloadCSV(){
   state.data.forEach(r => { csv += `${r.array},${r.ab2},${r.mn2===null?'':r.mn2},${r.r===null?'':r.r},${r.k===null?'':r.k.toFixed(2)},${r.rho.toFixed(2)}\n`; });
   if (state.lastModel){
     const lm = state.lastModel;
-    csv += `\n# --- Interpreted 1D Earth Model${lm.source==='invert'?` (RMS Misfit: ${lm.rmsPercent.toFixed(2)}%)`:''} ---\n`;
+    csv += `\n# --- Interpreted 1D Earth Model${lm.source==='invert'?` (RMS Misfit: ${lm.rmsPercent.toFixed(2)}%${lm.curveSmoothed?' on smoothed curve; '+lm.rawRmsPercent.toFixed(2)+'% vs raw readings':''})`:''} ---\n`;
     csv += 'Layer,Resistivity_Ohm_m,Thickness_m,Depth_to_Base_m\n';
     for (let i=0;i<lm.nLayers;i++){
       const thickStr = i < lm.nLayers-1 ? lm.thicknesses[i].toFixed(2) : '\u221E';
@@ -1924,7 +2009,7 @@ function downloadHTMLReport(){
   if (state.lastModel){
     const lm = state.lastModel;
     modelHtml = `<h2>Interpreted 1D Earth Model</h2>
-      ${lm.source==='invert' ? `<div class="model-box">RMS Misfit vs. Field Data: ${lm.rmsPercent.toFixed(2)}%</div>` : ''}
+      ${lm.source==='invert' ? `<div class="model-box">RMS Misfit vs. Field Data: ${lm.rmsPercent.toFixed(2)}%${lm.curveSmoothed?' (fitted to a smoothed curve; '+lm.rawRmsPercent.toFixed(2)+'% against raw readings)':''}</div>` : ''}
       <table><thead><tr><th>Layer</th><th>Resistivity (&Omega;-m)</th><th>Thickness (m)</th><th>Depth to Base (m)</th></tr></thead><tbody>
       ${Array.from({length: lm.nLayers}, (_,i) => {
         const thickStr = i < lm.nLayers-1 ? lm.thicknesses[i].toFixed(2) : '\u221E';
