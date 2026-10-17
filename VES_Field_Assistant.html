@@ -409,7 +409,7 @@ function resistivityTransform(res, thk, lam){
   return tt;
 }
 
-function forwardModelSchlumberger(res, thk, ab2Values){
+function forwardPointSchlumberger(res, thk, ab2Values){
   const out = [];
   for (const ab2 of ab2Values){
     let x = Math.exp(YM6_Y1) / ab2;
@@ -421,6 +421,34 @@ function forwardModelSchlumberger(res, thk, ab2Values){
     }
     out.push(rr);
   }
+  return out;
+}
+
+/* Forward model. The YM6 filter gives the point-limit (MN -> 0) Schlumberger
+   apparent resistivity, rho_s(r). Field readings use a finite MN, and K
+   (calcKSchlumberger) is the exact finite-MN factor, so the model must use the
+   same geometry. When mn2Values is supplied, each reading is converted exactly:
+   the potential difference over MN is the integral of the field E(r) =
+   I*rho_s(r)/(2*pi*r^2) of each current electrode, so
+       rho_a(L,l) = (L^2 - l^2)/(2l) * integral_{L-l}^{L+l} rho_s(r)/r^2 dr
+   (3-point Gauss-Legendre; checked against the full Hankel integral to <0.05%).
+   Readings with no MN/2 (direct resistivity) or a missing value stay point-limit. */
+const GL3_T = [-Math.sqrt(0.6), 0, Math.sqrt(0.6)], GL3_W = [5/9, 8/9, 5/9];
+function forwardModelSchlumberger(res, thk, ab2Values, mn2Values){
+  if (!mn2Values) return forwardPointSchlumberger(res, thk, ab2Values);
+  const radii = [], idx = [];
+  ab2Values.forEach((L,i) => {
+    const l = mn2Values[i];
+    if (l > 0 && l < L){ idx.push(i); for (const t of GL3_T) radii.push(L + l*t); }
+  });
+  const rs = radii.length ? forwardPointSchlumberger(res, thk, radii) : [];
+  const out = forwardPointSchlumberger(res, thk, ab2Values);
+  idx.forEach((i,n) => {
+    const L = ab2Values[i], l = mn2Values[i];
+    let s = 0;
+    for (let q = 0; q < 3; q++){ const r = radii[3*n+q]; s += GL3_W[q] * rs[3*n+q] / (r*r); }
+    out[i] = (L*L - l*l) / 2 * s;
+  });
   return out;
 }
 
@@ -626,7 +654,8 @@ function smoothFieldCurve(points){
 function attachRawFit(model, rawPoints){
   const sorted = rawPoints.slice().sort((a,b)=>a.ab2-b.ab2);
   const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
-  const predicted = forwardModelSchlumberger(model.resistivities, model.thicknesses, ab2List);
+  const mn2List = sorted.map(p=>p.mn2);
+  const predicted = forwardModelSchlumberger(model.resistivities, model.thicknesses, ab2List, mn2List);
   const sq = rhoList.map((obs,i) => Math.pow((obs-predicted[i])/obs, 2));
   model.curveSmoothed = true;
   model.rawRmsPercent = Math.sqrt(sq.reduce((a,b)=>a+b,0)/sq.length) * 100;
@@ -638,6 +667,7 @@ function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.
   resCeiling = Math.min(resCeiling, MAX_RES_CEILING);
   const sorted = dataPoints.slice().sort((a,b)=>a.ab2-b.ab2);
   const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+  const mn2List = sorted.map(p=>p.mn2);
 
   const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
   const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
@@ -663,7 +693,7 @@ function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.
     const [res, thk] = decode(params);
     const pen = resolvabilityPenalty(thk, minAb2);
     let predicted;
-    try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+    try { predicted = forwardModelSchlumberger(res, thk, ab2List, mn2List); }
     catch(e){ return ab2List.map(()=>1e6).concat(pen); }
     return rhoList.map((obs,i) => {
       const pred = predicted[i];
@@ -684,7 +714,7 @@ function invert1DModel(dataPoints, nLayers, restartsPerSeed=6, resCeiling=state.
     }
   }
   const [finalRes, finalThk] = decode(best.x);
-  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List, mn2List);
   const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
   const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
 
@@ -770,6 +800,7 @@ function invert1DModelSmoothed(dataPoints, nLayers, opts){
 
   const sorted = dataPoints.slice().sort((a,b)=>a.ab2-b.ab2);
   const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+  const mn2List = sorted.map(p=>p.mn2);
 
   const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
   const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
@@ -789,7 +820,7 @@ function invert1DModelSmoothed(dataPoints, nLayers, opts){
     const [res, thk] = decode(params);
     const pen = resolvabilityPenalty(thk, minAb2);
     let predicted;
-    try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+    try { predicted = forwardModelSchlumberger(res, thk, ab2List, mn2List); }
     catch(e){ return ab2List.map(()=>1e3).concat(pen); }
     return rhoList.map((obs,i) => {
       const pred = predicted[i];
@@ -812,7 +843,7 @@ function invert1DModelSmoothed(dataPoints, nLayers, opts){
 
   const finalX = adaptiveSmoothFromBaseline(dataResiduals, decode, baseline.x, baseline.cost, relaxationFactor);
   const [finalRes, finalThk] = decode(finalX);
-  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+  const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List, mn2List);
   const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
   const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
   const depths = []; let running = 0;
@@ -1772,6 +1803,7 @@ function refineDesignModel(){
     const n = state.designLayers.length;
     const sorted = state.data.slice().sort((a,b)=>a.ab2-b.ab2);
     const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+  const mn2List = sorted.map(p=>p.mn2);
 
     const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
     const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
@@ -1791,7 +1823,7 @@ function refineDesignModel(){
     function residuals(params){
       const [res, thk] = decode(params);
       let predicted;
-      try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+      try { predicted = forwardModelSchlumberger(res, thk, ab2List, mn2List); }
       catch(e){ return ab2List.map(()=>1e3); }
       return rhoList.map((obs,i) => {
         const pred = predicted[i];
@@ -1822,7 +1854,7 @@ function refineDesignModel(){
       : best.x;
 
     const [finalRes, finalThk] = decode(finalX);
-    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List, mn2List);
     const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
     const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
     const depths = []; let running = 0;
@@ -1860,6 +1892,7 @@ function iterateDesignModel(){
     const n = state.designLayers.length;
     const sorted = state.data.slice().sort((a,b)=>a.ab2-b.ab2);
     const ab2List = sorted.map(p=>p.ab2), rhoList = sorted.map(p=>p.rho);
+  const mn2List = sorted.map(p=>p.mn2);
 
     const minObsRho = Math.min(...rhoList), maxObsRho = Math.max(...rhoList);
     const minAb2 = Math.min(...ab2List), maxAb2 = Math.max(...ab2List);
@@ -1879,7 +1912,7 @@ function iterateDesignModel(){
     function residuals(params){
       const [res, thk] = decode(params);
       let predicted;
-      try { predicted = forwardModelSchlumberger(res, thk, ab2List); }
+      try { predicted = forwardModelSchlumberger(res, thk, ab2List, mn2List); }
       catch(e){ return ab2List.map(()=>1e3); }
       return rhoList.map((obs,i) => {
         const pred = predicted[i];
@@ -1901,7 +1934,7 @@ function iterateDesignModel(){
 
     const stepped = levenbergMarquardt(residuals, x0, {maxIter: DESIGN_ITERATION_STEPS});
     const [finalRes, finalThk] = decode(stepped.x);
-    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List);
+    const predicted = forwardModelSchlumberger(finalRes, finalThk, ab2List, mn2List);
     const sqPct = rhoList.map((obs,i)=> Math.pow((obs-predicted[i])/obs, 2));
     const rmsPercent = Math.sqrt(sqPct.reduce((a,b)=>a+b,0)/sqPct.length) * 100;
     const depths = []; let running = 0;
