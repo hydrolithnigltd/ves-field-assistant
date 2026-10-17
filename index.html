@@ -311,6 +311,8 @@ const state = {
   justRestored: 0,
   resCeiling: DEFAULT_RES_CEILING,
   curveSmoothing: false,
+  overlapMode: 'all',      // 'all' | 'small' | 'large' | 'mean' — one reading per AB/2 where MN/2 changed
+  overlapCompare: null,
   gpsFetching: false,
   gpsError: null,
   gpsNote: null,
@@ -1142,7 +1144,7 @@ function buildModelSummarySvg(model){
   const H = afterStatsY + footerH - 14;
 
   const title = `Interpreted 1D Earth Model${state.metadata.station ? ' \u2014 ' + state.metadata.station : ''}`;
-  const subtitle = model.source === 'invert' ? `${model.nLayers} layers \u00B7 RMS misfit ${model.rmsPercent.toFixed(2)}%${model.curveSmoothed ? ' (smoothed curve; raw ' + model.rawRmsPercent.toFixed(2) + '%)' : ''}` : `${model.nLayers} layers \u00B7 designed model`;
+  const subtitle = model.source === 'invert' ? `${model.nLayers} layers \u00B7 RMS misfit ${model.rmsPercent.toFixed(2)}%${model.curveSmoothed ? ' (smoothed curve; raw ' + model.rawRmsPercent.toFixed(2) + '%)' : ''}${model.overlapMode && model.overlapMode!=='all' ? ' \u00B7 one reading per AB/2 (' + OVERLAP_LABELS[model.overlapMode].toLowerCase() + ')' : ''}` : `${model.nLayers} layers \u00B7 designed model`;
 
   // NOTE: this string is loaded into an <img> as image/svg+xml, which parses
   // as strict XML -- only the five predefined XML entities are valid there,
@@ -1599,6 +1601,7 @@ function viewInvert(){
         <div class="stat"><div class="n">${m.rmsPercent.toFixed(1)}%</div><div class="l">RMS misfit${m.curveSmoothed ? ' (smoothed curve)' : ''}</div></div>
         <div class="stat"><div class="n">${m.nLayers}</div><div class="l">Layers</div></div>
       </div>
+      ${m.overlapMode && m.overlapMode!=='all' ? `<div class="alert info">${ICONS.bolt}<div>Fitted with one reading per AB/2 (${OVERLAP_LABELS[m.overlapMode].toLowerCase()}) where MN/2 changed. RMS against all logged readings: ${m.rawAllRmsPercent.toFixed(1)}%.</div></div>` : ''}
       ${m.curveSmoothed ? `<div class="alert info">${ICONS.bolt}<div>Fitted to a smoothed copy of your curve. RMS against your raw logged readings: ${m.rawRmsPercent.toFixed(1)}%.</div></div>` : ''}
       <div class="alert ${fitClass}">${ICONS.bolt}<div>${fitWord}</div></div>
       <div class="chart-frame" id="invert-chart">
@@ -1615,6 +1618,19 @@ function viewInvert(){
         <span class="sw"><span class="ln" style="border-top-color:#a63a2c"></span>Layer model</span>
       </div>
     `;
+  }
+
+  let compareHtml = '';
+  if (state.overlapCompare && state.overlapCompare.sig === compareSignature()){
+    const rows = state.overlapCompare.rows;
+    const ds = rows.filter(r=>r.mode!=='all').map(r=>r.depth);
+    compareHtml = `
+      <div class="section-title" style="margin-top:14px;">Overlap choices compared</div>
+      <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <tr style="text-align:left; color:var(--text-dimmer);"><th>Readings used</th><th>Depth to deepest layer (m)</th><th>Deepest \u03C1 (\u03A9\u00B7m)</th><th>RMS</th></tr>
+        ${rows.map(r=>`<tr><td>${OVERLAP_LABELS[r.mode]}</td><td>${r.depth.toFixed(1)}</td><td>${r.deepRho.toFixed(0)}</td><td>${r.rms.toFixed(1)}%</td></tr>`).join('')}
+      </table></div>
+      <div class="alert info">${ICONS.bolt}<div>One reading per AB/2 gives a depth of ${Math.min(...ds).toFixed(1)}\u2013${Math.max(...ds).toFixed(1)} m to the deepest layer. If these agree, the result does not depend on how overlaps were handled; if they differ, report the range. Each run restarts from random seeds, so differences of a few percent are noise.</div></div>`;
   }
 
   return `
@@ -1642,22 +1658,87 @@ function viewInvert(){
     <div class="section-sub" style="margin-top:-8px;">${state.curveSmoothing
       ? "Fits a smoothed copy of your curve, as IPI2Win and WinResist do: readings at the same AB/2 are averaged, then the curve is smoothed in log-log space. This removes MN/2-change jumps and noise, so the RMS is comparable to theirs. The RMS against your raw readings is shown alongside."
       : "Fits your readings exactly as logged, including any jumps where MN/2 was changed."}</div>
+    <label>Readings at repeated AB/2</label>
+    <div class="seg">
+      ${['all','small','large','mean'].map(k => `<button class="${state.overlapMode===k?'active':''}" onclick="state.overlapMode='${k}'; render();">${OVERLAP_LABELS[k]}</button>`).join('')}
+    </div>
+    <div class="section-sub" style="margin-top:-8px;">${state.overlapMode==='all'
+      ? "Uses every reading, including both values logged at an AB/2 where MN/2 was changed."
+      : "Uses one reading per AB/2 where MN/2 was changed (" + OVERLAP_LABELS[state.overlapMode].toLowerCase() + "), so the two disagreeing values no longer pull the fit apart."}</div>
     <button class="btn primary block" id="invert-btn" onclick="runInversion()">Run inversion</button>
+    <button class="btn block" id="compare-btn" style="margin-top:8px;" onclick="runOverlapCompare()">Compare overlap choices</button>
+    ${compareHtml}
     ${resultHtml}
   `;
 }
+/* ---- One reading per AB/2 -------------------------------------------------
+   Where MN/2 is changed the same AB/2 is logged twice, and the two readings
+   usually disagree (the segment jump). A 1D model cannot fit both, so the
+   inversion invents extra structure. 'small'/'large' keep the reading made with
+   the smaller/larger MN/2; 'mean' takes the geometric mean (and mean MN/2). */
+const OVERLAP_LABELS = {all:'All readings', small:'Smaller MN/2', large:'Larger MN/2', mean:'Average'};
+function reduceOverlaps(points, mode){
+  if (!mode || mode === 'all') return points;
+  const g = new Map();
+  points.forEach(p => { if (!g.has(p.ab2)) g.set(p.ab2, []); g.get(p.ab2).push(p); });
+  const out = [];
+  for (const [ab2, grp] of g){
+    if (grp.length === 1){ out.push(grp[0]); continue; }
+    const withMn = grp.filter(q => q.mn2 > 0);
+    if (mode === 'mean'){
+      const rho = Math.pow(10, grp.reduce((s,q)=>s+Math.log10(q.rho),0) / grp.length);
+      const mn2 = withMn.length === grp.length ? grp.reduce((s,q)=>s+q.mn2,0)/grp.length : null;
+      out.push({array: grp[0].array, ab2, mn2, r: null, k: null, rho});
+    } else {
+      const pool = withMn.length ? withMn : grp;
+      out.push(pool.reduce((best,q) => (mode === 'small' ? q.mn2 < best.mn2 : q.mn2 > best.mn2) ? q : best));
+    }
+  }
+  return out.sort((a,b)=>a.ab2-b.ab2);
+}
+function rawRmsOf(model, rawPoints){
+  const sorted = rawPoints.slice().sort((a,b)=>a.ab2-b.ab2);
+  const pred = forwardModelSchlumberger(model.resistivities, model.thicknesses, sorted.map(p=>p.ab2), sorted.map(p=>p.mn2));
+  return Math.sqrt(sorted.reduce((s,p,i)=>s+Math.pow((p.rho-pred[i])/p.rho,2),0)/sorted.length) * 100;
+}
+function fitForMode(mode){
+  const method = state.invertMethod || 'bestfit';
+  const base = reduceOverlaps(state.data, mode);
+  const fitData = state.curveSmoothing ? smoothFieldCurve(base) : base;
+  const model = method === 'smoothed'
+    ? invert1DModelSmoothed(fitData, state.invertLayers)
+    : invert1DModel(fitData, state.invertLayers);
+  if (state.curveSmoothing) attachRawFit(model, state.data);
+  model.source = 'invert'; model.method = method;
+  model.overlapMode = mode;
+  model.rawAllRmsPercent = rawRmsOf(model, state.data);
+  return model;
+}
+function compareSignature(){
+  return state.data.map(p=>p.ab2+':'+p.mn2+':'+p.rho).join('|') + '#' + state.invertLayers + (state.invertMethod||'bestfit') + state.curveSmoothing;
+}
+function runOverlapCompare(){
+  const btn = el('compare-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Comparing\u2026`;
+  setTimeout(() => {
+    const rows = ['all','small','large','mean'].map(mode => {
+      const m = fitForMode(mode);
+      return {mode, depth: m.depths[m.depths.length-1], rms: m.rmsPercent, rawRms: m.rawAllRmsPercent,
+              deepRho: m.resistivities[m.resistivities.length-1], nLayers: m.nLayers};
+    });
+    state.overlapCompare = {sig: compareSignature(), rows};
+    render();
+  }, 40);
+}
+
 function runInversion(){
   const btn = el('invert-btn');
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> Running inversion\u2026`;
   setTimeout(() => {
     const method = state.invertMethod || 'bestfit';
-    const fitData = state.curveSmoothing ? smoothFieldCurve(state.data) : state.data;
-    const model = method === 'smoothed'
-      ? invert1DModelSmoothed(fitData, state.invertLayers)
-      : invert1DModel(fitData, state.invertLayers);
-    if (state.curveSmoothing) attachRawFit(model, state.data);
-    model.source = 'invert';
+    const model = fitForMode(state.overlapMode);
     model.method = method;
     state.lastModel = model;
     render();
