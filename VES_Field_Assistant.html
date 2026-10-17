@@ -618,10 +618,9 @@ function resolvabilityPenalty(thk, minAb2){
   return out;
 }
 
-/* IPI2Win-style field-curve smoothing (optional, off by default).
-   Commercial packages such as IPI2Win and WinResist fit a smoothed copy of
-   the field curve (WinResist reports its RMS "on smoothed data"), not the raw
-   readings. Raw Schlumberger data carries small jumps where MN/2 is changed
+/* Field-curve smoothing (optional, off by default).
+   Some interpretation packages fit a smoothed copy of the field curve rather
+   than the raw readings. Raw Schlumberger data carries small jumps where MN/2 is changed
    at a repeated AB/2 plus ordinary noise, and an unsmoothed fit will chase
    them. This does the same in two steps: (1) readings at the same AB/2 are
    averaged (in log space) into one point; (2) the curve is smoothed in
@@ -950,7 +949,7 @@ function buildLogLogChart(seriesList, opts){
 }
 
 /* Builds the "block model" step function VES practitioners overlay on the
-   sounding curve (as seen in WinResist/IPI2Win): a staircase of the layer
+   sounding curve (as commonly drawn in VES interpretation): a staircase of the layer
    model's own resistivities plotted against depth, on the same log-x axis
    as the apparent-resistivity curve. Not a physically identical quantity to
    apparent resistivity (it's true resistivity vs. depth, not apparent
@@ -1653,10 +1652,10 @@ function viewInvert(){
     <label>Field curve</label>
     <div class="seg">
       <button class="${!state.curveSmoothing?'active':''}" onclick="state.curveSmoothing=false; render();">As logged</button>
-      <button class="${state.curveSmoothing?'active':''}" onclick="state.curveSmoothing=true; render();">Smoothed (IPI2Win-style)</button>
+      <button class="${state.curveSmoothing?'active':''}" onclick="state.curveSmoothing=true; render();">Smoothed</button>
     </div>
     <div class="section-sub" style="margin-top:-8px;">${state.curveSmoothing
-      ? "Fits a smoothed copy of your curve, as IPI2Win and WinResist do: readings at the same AB/2 are averaged, then the curve is smoothed in log-log space. This removes MN/2-change jumps and noise, so the RMS is comparable to theirs. The RMS against your raw readings is shown alongside."
+      ? "Fits a smoothed copy of your curve: readings at the same AB/2 are averaged, then the curve is smoothed in log-log space. This reduces MN/2-change jumps and noise. The RMS against your raw readings is shown alongside."
       : "Fits your readings exactly as logged, including any jumps where MN/2 was changed."}</div>
     <label>Readings at repeated AB/2</label>
     <div class="seg">
