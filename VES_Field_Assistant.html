@@ -284,14 +284,10 @@
 const APP_VERSION = '4.0';
 const APP_COPYRIGHT = '\u00A9 2026 Asije Labs';
 
-// Hard ceiling on the last (deepest) layer's resistivity. Capped at 20,000
-// Ohm-m by design -- the optimizer will never report a deeper/basement
-// resistivity above this, however steeply the tail of the field curve rises
-// (equivalence lets that parameter drift arbitrarily high once it's
-// saturated the curve, with no further improvement to the fit, so this cap
-// is what keeps the reported value physically sane rather than a numerical
-// runaway artifact).
-const MAX_RES_CEILING = 20000;
+// No fixed ceiling on the deepest layer's resistivity. It is still bounded by
+// the same data-adaptive limit as every other layer (200 x the highest
+// observed apparent resistivity), which only prevents numerical runaway.
+const MAX_RES_CEILING = Infinity;
 const DEFAULT_RES_CEILING = MAX_RES_CEILING;
 
 const state = {
@@ -1657,13 +1653,6 @@ function viewInvert(){
     <div class="section-sub" style="margin-top:-8px;">${state.curveSmoothing
       ? "Fits a smoothed copy of your curve: readings at the same AB/2 are averaged, then the curve is smoothed in log-log space. This reduces MN/2-change jumps and noise. The RMS against your raw readings is shown alongside."
       : "Fits your readings exactly as logged, including any jumps where MN/2 was changed."}</div>
-    <label>Readings at repeated AB/2</label>
-    <div class="seg">
-      ${['all','small','large','mean'].map(k => `<button class="${state.overlapMode===k?'active':''}" onclick="state.overlapMode='${k}'; render();">${OVERLAP_LABELS[k]}</button>`).join('')}
-    </div>
-    <div class="section-sub" style="margin-top:-8px;">${state.overlapMode==='all'
-      ? "Uses every reading, including both values logged at an AB/2 where MN/2 was changed."
-      : "Uses one reading per AB/2 where MN/2 was changed (" + OVERLAP_LABELS[state.overlapMode].toLowerCase() + "), so the two disagreeing values no longer pull the fit apart."}</div>
     <button class="btn primary block" id="invert-btn" onclick="runInversion()">Run inversion</button>
     <button class="btn block" id="compare-btn" style="margin-top:8px;" onclick="runOverlapCompare()">Compare overlap choices</button>
     ${compareHtml}
