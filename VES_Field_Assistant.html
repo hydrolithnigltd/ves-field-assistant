@@ -1292,7 +1292,7 @@ function viewSetup(){
     <label>Station ID</label>
     <input type="text" value="${escAttr(state.metadata.station)}" placeholder="e.g. ST-05" oninput="state.metadata.station=this.value; renderStatus();">
 
-    <label>Geologist</label>
+    <label>Field Operator</label>
     <input type="text" value="${escAttr(state.metadata.geologist)}" placeholder="e.g. A. Okafor" oninput="state.metadata.geologist=this.value;">
 
     <label>GPS coordinates</label>
@@ -2103,7 +2103,7 @@ function triggerDownload(filename, content, mime){
 }
 function downloadCSV(){
   const m = state.metadata;
-  let csv = `# Client Name: ${m.project}\n# Location: ${m.location||''}\n# Station ID: ${m.station}\n# Geologist: ${m.geologist}\n# GPS Coordinates: ${m.gps}\n# Export Timestamp: ${new Date().toISOString()}\n# VES Field Assistant v${APP_VERSION} \u00B7 Powered by Asije Labs \u00B7 ${APP_COPYRIGHT}\n`;
+  let csv = `# Client Name: ${m.project}\n# Location: ${m.location||''}\n# Station ID: ${m.station}\n# Field Operator: ${m.geologist}\n# GPS Coordinates: ${m.gps}\n# Export Timestamp: ${new Date().toISOString()}\n# VES Field Assistant v${APP_VERSION} \u00B7 Powered by Asije Labs \u00B7 ${APP_COPYRIGHT}\n`;
   csv += 'Array,AB2,MN2,Resistance,K_Factor,App_Resistivity\n';
   state.data.forEach(r => { csv += `${r.array},${r.ab2},${r.mn2===null?'':r.mn2},${r.r===null?'':r.r},${r.k===null?'':r.k.toFixed(2)},${r.rho.toFixed(2)}\n`; });
   if (state.lastModel){
@@ -2152,7 +2152,7 @@ function downloadHTMLReport(){
     <div><span class="metadata-item">Client Name:</span> ${m.project}</div>
     <div><span class="metadata-item">Location:</span> ${m.location||''}</div>
     <div><span class="metadata-item">Station ID:</span> ${m.station}</div>
-    <div><span class="metadata-item">Geologist:</span> ${m.geologist}</div>
+    <div><span class="metadata-item">Field Operator:</span> ${m.geologist}</div>
     <div><span class="metadata-item">GPS:</span> ${m.gps}</div>
     <div><span class="metadata-item">Export:</span> ${new Date().toLocaleString()}</div>
   </div>
